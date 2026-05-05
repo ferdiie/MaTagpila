@@ -1,178 +1,165 @@
+// lib/features/shared/services/firestore_services.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../models/app_user.dart';
-import '../models/item_model.dart';
-import '../models/sale_model.dart';
+import '../models/price_item_model.dart';
 
 part 'firestore_services.g.dart';
 
+// ─────────────────────────────────────────────
+//  FIREBASE INSTANCES
+// ─────────────────────────────────────────────
 @riverpod
 FirebaseAuth firebaseAuth(Ref ref) => FirebaseAuth.instance;
 
 @riverpod
-FirebaseFirestore firebaseFirestore(Ref ref) =>
-    FirebaseFirestore.instance;
+FirebaseFirestore firebaseFirestore(Ref ref) => FirebaseFirestore.instance;
 
 @riverpod
 Stream<User?> authStateChanges(Ref ref) {
   return ref.watch(firebaseAuthProvider).authStateChanges();
 }
 
-@riverpod
-Stream<AppUser?> currentAppUser(Ref ref) {
-  final firestore = ref.watch(firebaseFirestoreProvider);
-  final authChanges = ref.watch(authStateChangesProvider);
-
-  return authChanges.when(
-    data: (firebaseUser) {
-      if (firebaseUser == null) {
-        return Stream.value(null);
-      }
-      return firestore
-          .collection('users')
-          .doc(firebaseUser.uid)
-          .snapshots()
-          .map((doc) => doc.exists ? AppUser.fromSnapshot(doc) : null);
-    },
-    error: (_, __) => Stream.value(null),
-    loading: () => Stream.value(null),
-  );
-}
-
+// ─────────────────────────────────────────────
+//  AUTH SERVICE
+// ─────────────────────────────────────────────
 class AuthService {
   final FirebaseAuth _auth;
-  final FirebaseFirestore _firestore;
 
-  AuthService(this._auth, this._firestore);
+  AuthService(this._auth);
 
-  Future<void> login({
-    required String email,
-    required String password,
-  }) async {
+  User? get currentUser => _auth.currentUser;
+  String get currentUserEmail => _auth.currentUser?.email ?? '';
+  String get currentUserId => _auth.currentUser?.uid ?? '';
+
+  Future<void> signIn({required String email, required String password}) async {
     await _auth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password.trim(),
     );
   }
 
-  Future<void> logout() => _auth.signOut();
+  Future<UserCredential> signUp(
+      {required String email, required String password}) async {
+    return await _auth.createUserWithEmailAndPassword(
+      email: email.trim(),
+      password: password.trim(),
+    );
+  }
 
-  Future<AppUser?> loadCurrentUser() async {
-    final currentUser = _auth.currentUser;
-    if (currentUser == null) return null;
-    final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
-    if (!userDoc.exists) return null;
-    return AppUser.fromSnapshot(userDoc);
+  Future<void> signOut() => _auth.signOut();
+
+  Future<void> sendPasswordReset(String email) async {
+    await _auth.sendPasswordResetEmail(email: email.trim());
   }
 }
 
 @riverpod
 AuthService authService(Ref ref) {
-  return AuthService(
-    ref.watch(firebaseAuthProvider),
-    ref.watch(firebaseFirestoreProvider),
-  );
+  return AuthService(ref.watch(firebaseAuthProvider));
 }
 
-class ItemsService {
+// ─────────────────────────────────────────────
+//  PRICES SERVICE  (main collection)
+// ─────────────────────────────────────────────
+class PricesService {
   final FirebaseFirestore _firestore;
 
-  ItemsService(this._firestore);
+  PricesService(this._firestore);
 
-  Stream<List<ItemModel>> watchItems() {
-    return _firestore.collection('items').snapshots().map(
-          (snapshot) => snapshot.docs.map(ItemModel.fromSnapshot).toList(),
-        );
+  CollectionReference<Map<String, dynamic>> get _col =>
+      _firestore.collection('prices');
+
+  // Watch all items
+  Stream<List<PriceItem>> watchAll() {
+    return _col
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
   }
-}
 
-@riverpod
-ItemsService itemsService(Ref ref) {
-  return ItemsService(ref.watch(firebaseFirestoreProvider));
-}
+  // Watch items added by current user only
+  Stream<List<PriceItem>> watchMine(String userId) {
+    return _col
+        .where('addedBy', isEqualTo: userId)
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
+  }
 
-@riverpod
-Stream<List<ItemModel>> itemsStream(Ref ref) {
-  return ref.watch(itemsServiceProvider).watchItems();
-}
+  // Search by name (client-side fuzzy after fetching)
+  Future<List<PriceItem>> searchByName(String query) async {
+    if (query.trim().isEmpty) return [];
+    final q = query.trim().toLowerCase();
+    final snap = await _col
+        .where('nameLower', isGreaterThanOrEqualTo: q)
+        .where('nameLower', isLessThanOrEqualTo: '$q\uf8ff')
+        .limit(50)
+        .get();
+    return snap.docs.map(PriceItem.fromSnapshot).toList();
+  }
 
-class PosCheckoutItem {
-  final String itemId;
-  final int qty;
-  final double priceAtSale;
-
-  const PosCheckoutItem({
-    required this.itemId,
-    required this.qty,
-    required this.priceAtSale,
-  });
-}
-
-class PosService {
-  final FirebaseFirestore _firestore;
-
-  PosService(this._firestore);
-
-  Future<void> checkout({
-    required String cashierId,
-    required List<PosCheckoutItem> items,
+  // Add new item
+  Future<void> addItem({
+    required String name,
+    required double price,
+    required String unit,
+    required String category,
+    required String store,
+    required String addedBy,
+    String? barcode,
+    String? imageUrl,
   }) async {
-    if (items.isEmpty) {
-      throw Exception('Cart is empty.');
-    }
-
-    final salesCollection = _firestore.collection('sales');
-    final itemsCollection = _firestore.collection('items');
-    final saleRef = salesCollection.doc();
-
-    await _firestore.runTransaction((transaction) async {
-      double totalAmount = 0;
-      final soldItems = <SoldItem>[];
-
-      for (final line in items) {
-        final itemRef = itemsCollection.doc(line.itemId);
-        final itemSnapshot = await transaction.get(itemRef);
-
-        if (!itemSnapshot.exists) {
-          throw Exception('Item not found: ${line.itemId}');
-        }
-
-        final item = ItemModel.fromSnapshot(itemSnapshot);
-        if (item.stockQty < line.qty) {
-          throw Exception('Insufficient stock for ${item.name}');
-        }
-
-        transaction.update(itemRef, {
-          'stockQty': item.stockQty - line.qty,
-        });
-
-        soldItems.add(
-          SoldItem(
-            itemId: line.itemId,
-            qty: line.qty,
-            priceAtSale: line.priceAtSale,
-          ),
-        );
-        totalAmount += line.qty * line.priceAtSale;
-      }
-
-      final sale = SaleModel(
-        id: saleRef.id,
-        timestamp: DateTime.now(),
-        itemsSold: soldItems,
-        totalAmount: totalAmount,
-        cashierId: cashierId,
-      );
-
-      transaction.set(saleRef, sale.toMap());
+    final now = FieldValue.serverTimestamp();
+    await _col.add({
+      'name': name.trim(),
+      'nameLower': name.trim().toLowerCase(),
+      'price': price,
+      'unit': unit,
+      'category': category,
+      'store': store,
+      'barcode': barcode,
+      'imageUrl': imageUrl,
+      'addedBy': addedBy,
+      'updatedAt': now,
+      'createdAt': now,
     });
   }
+
+  // Update item price
+  Future<void> updatePrice({
+    required String docId,
+    required double newPrice,
+    required String updatedBy,
+  }) async {
+    await _col.doc(docId).update({
+      'price': newPrice,
+      'addedBy': updatedBy,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  // Delete item
+  Future<void> deleteItem(String docId) async {
+    await _col.doc(docId).delete();
+  }
 }
 
 @riverpod
-PosService posService(Ref ref) {
-  return PosService(ref.watch(firebaseFirestoreProvider));
+PricesService pricesService(Ref ref) {
+  return PricesService(ref.watch(firebaseFirestoreProvider));
+}
+
+@riverpod
+Stream<List<PriceItem>> allPricesStream(Ref ref) {
+  return ref.watch(pricesServiceProvider).watchAll();
+}
+
+@riverpod
+Stream<List<PriceItem>> myPricesStream(Ref ref) {
+  final uid = ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
+  if (uid.isEmpty) return const Stream.empty();
+  return ref.watch(pricesServiceProvider).watchMine(uid);
 }

@@ -17,46 +17,51 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _tabIndex = 0;
+  bool _promptShown = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _showYesterdayPrompt());
   }
 
-  void _showYesterdayPrompt() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text("Yesterday's Sales", style: AppTextStyles.headingLg),
-              const SizedBox(height: 10),
-              Text(
-                'Review and export yesterday\'s transactions from your profile reports.',
-                style: AppTextStyles.bodyMd,
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Got it'),
+  void _maybeShowYesterdayPrompt() {
+    if (_promptShown) return;
+    _promptShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: AppColors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (context) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Yesterday's Sales", style: AppTextStyles.headingLg),
+                const SizedBox(height: 10),
+                Text(
+                  "Review and export yesterday's transactions from your profile reports.",
+                  style: AppTextStyles.bodyMd,
                 ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Got it'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    });
   }
 
   @override
@@ -64,13 +69,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final userAsync = ref.watch(currentAppUserProvider);
 
     return userAsync.when(
+      // ── Data: user document found ──────────────────────────────────────────
       data: (user) {
-        if (user == null) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        // If user doc doesn't exist in Firestore yet, fall back to Firebase Auth
+        final role = user?.role ?? UserRole.cashier;
+        final tabs = _tabsForRole(role);
+        final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
+
+        // Show prompt only for admins on first load
+        if (role == UserRole.admin) {
+          _maybeShowYesterdayPrompt();
         }
 
-        final tabs = _tabsForRole(user.role);
-        final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
         return Scaffold(
           backgroundColor: AppColors.cream,
           body: SafeArea(bottom: false, child: tabs[index].screen),
@@ -91,8 +101,38 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         );
       },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (_, __) => const Scaffold(body: Center(child: Text('Failed to load user'))),
+
+      // ── Loading ────────────────────────────────────────────────────────────
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+
+      // ── Error: show dashboard anyway using Firebase Auth fallback ──────────
+      error: (err, stack) {
+        // Still show the app — user is authenticated, just Firestore fetch failed
+        final tabs = _tabsForRole(UserRole.cashier);
+        final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
+
+        return Scaffold(
+          backgroundColor: AppColors.cream,
+          body: SafeArea(bottom: false, child: tabs[index].screen),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: index,
+            selectedItemColor: AppColors.orange,
+            unselectedItemColor: AppColors.textGrey,
+            onTap: (value) => setState(() => _tabIndex = value),
+            type: BottomNavigationBarType.fixed,
+            items: tabs
+                .map(
+                  (tab) => BottomNavigationBarItem(
+                    icon: Icon(tab.icon),
+                    label: tab.label,
+                  ),
+                )
+                .toList(),
+          ),
+        );
+      },
     );
   }
 
@@ -129,13 +169,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ];
     }
 
-    return const [
-      _TabData(
+    // Cashier / fallback
+    return [
+      const _TabData(
         label: 'POS',
         icon: Icons.point_of_sale_rounded,
         screen: PosTerminalScreen(),
       ),
-      _TabData(
+      const _TabData(
         label: 'Price Checker',
         icon: Icons.search_rounded,
         screen: _SimpleTab(title: 'Price Checker'),
@@ -145,7 +186,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Floating bottom nav — Dashboard · POS · Price Checker · Inventory · Profile
+//  Tab model
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _TabData {
@@ -161,7 +202,7 @@ class _TabData {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Dashboard tab (scroll body)
+//  Dashboard body
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _DashboardBody extends StatelessWidget {
@@ -200,8 +241,10 @@ class _DashboardBody extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Welcome back!',
-                          style: TextStyle(color: AppColors.white, fontSize: 16)),
+                      const Text(
+                        'Welcome back!',
+                        style: TextStyle(color: AppColors.white, fontSize: 16),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         user?.email?.split('@').first.toUpperCase() ??
@@ -212,11 +255,14 @@ class _DashboardBody extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
-                      Text('Your store is looking good.',
-                          style: TextStyle(
-                              color:
-                                  AppColors.white.withAlpha((0.92 * 255).toInt()),
-                              fontSize: 12)),
+                      Text(
+                        'Your store is looking good.',
+                        style: TextStyle(
+                          color:
+                              AppColors.white.withAlpha((0.92 * 255).toInt()),
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -254,9 +300,11 @@ class _DashboardBody extends StatelessWidget {
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   child: Row(
                     children: [
-                      Icon(Icons.search_rounded,
-                          color: AppColors.orangeLight
-                              .withAlpha((0.85 * 255).toInt())),
+                      Icon(
+                        Icons.search_rounded,
+                        color: AppColors.orangeLight
+                            .withAlpha((0.85 * 255).toInt()),
+                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -289,6 +337,10 @@ class _DashboardBody extends StatelessWidget {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Placeholder tab
+// ═══════════════════════════════════════════════════════════════════════════
+
 class _SimpleTab extends StatelessWidget {
   final String title;
 
@@ -301,6 +353,10 @@ class _SimpleTab extends StatelessWidget {
     );
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  POS Terminal
+// ═══════════════════════════════════════════════════════════════════════════
 
 class PosTerminalScreen extends ConsumerWidget {
   const PosTerminalScreen({super.key});
@@ -315,7 +371,8 @@ class PosTerminalScreen extends ConsumerWidget {
         return _PosContent(items: items, cashierId: currentUser?.uid ?? '');
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) => const Center(child: Text('Unable to load inventory items')),
+      error: (_, __) =>
+          const Center(child: Text('Unable to load inventory items')),
     );
   }
 }

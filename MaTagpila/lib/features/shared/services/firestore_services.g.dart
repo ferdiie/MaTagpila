@@ -57,24 +57,7 @@ final authStateChangesProvider = AutoDisposeStreamProvider<User?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AuthStateChangesRef = AutoDisposeStreamProviderRef<User?>;
-String _$currentAppUserHash() => r'8cd13c61268daa6be1706526544fbef81e18d187';
-
-/// See also [currentAppUser].
-@ProviderFor(currentAppUser)
-final currentAppUserProvider = AutoDisposeStreamProvider<AppUser?>.internal(
-  currentAppUser,
-  name: r'currentAppUserProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$currentAppUserHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef CurrentAppUserRef = AutoDisposeStreamProviderRef<AppUser?>;
-String _$authServiceHash() => r'2a544a917f41e13aa663000e05cd336123da0f55';
+String _$authServiceHash() => r'ac0fb87c9db72a1b3f29aaf90428ac20b82a7b4e';
 
 /// See also [authService].
 @ProviderFor(authService)
@@ -90,53 +73,58 @@ final authServiceProvider = AutoDisposeProvider<AuthService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AuthServiceRef = AutoDisposeProviderRef<AuthService>;
-String _$itemsServiceHash() => r'580458263c90cb362c62fe0e36ada483e0d57230';
+String _$pricesServiceHash() => r'0dac6fc7faf4c215b186db8c533c4b5a11ffb0d7';
 
-/// See also [itemsService].
-@ProviderFor(itemsService)
-final itemsServiceProvider = AutoDisposeProvider<ItemsService>.internal(
-  itemsService,
-  name: r'itemsServiceProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$itemsServiceHash,
+/// See also [pricesService].
+@ProviderFor(pricesService)
+final pricesServiceProvider = AutoDisposeProvider<PricesService>.internal(
+  pricesService,
+  name: r'pricesServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$pricesServiceHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
-typedef ItemsServiceRef = AutoDisposeProviderRef<ItemsService>;
-String _$itemsStreamHash() => r'b1aab322b505da16d78f5d0850350af736bce929';
+typedef PricesServiceRef = AutoDisposeProviderRef<PricesService>;
+String _$allPricesStreamHash() => r'3635501c68bbd7a1901bbc95087ae1b5e8e2481a';
 
-/// See also [itemsStream].
-@ProviderFor(itemsStream)
-final itemsStreamProvider = AutoDisposeStreamProvider<List<ItemModel>>.internal(
-  itemsStream,
-  name: r'itemsStreamProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$itemsStreamHash,
+/// See also [allPricesStream].
+@ProviderFor(allPricesStream)
+final allPricesStreamProvider =
+    AutoDisposeStreamProvider<List<PriceItem>>.internal(
+  allPricesStream,
+  name: r'allPricesStreamProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$allPricesStreamHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
-typedef ItemsStreamRef = AutoDisposeStreamProviderRef<List<ItemModel>>;
-String _$posServiceHash() => r'0ea1e6d30506b538d9f141687e8af7952d1d19a3';
+typedef AllPricesStreamRef = AutoDisposeStreamProviderRef<List<PriceItem>>;
+String _$myPricesStreamHash() => r'2bfd8285a3a22c9b7078acaeb2708c2544cbbe9b';
 
-/// See also [posService].
-@ProviderFor(posService)
-final posServiceProvider = AutoDisposeProvider<PosService>.internal(
-  posService,
-  name: r'posServiceProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$posServiceHash,
+/// See also [myPricesStream].
+@ProviderFor(myPricesStream)
+final myPricesStreamProvider =
+    AutoDisposeStreamProvider<List<PriceItem>>.internal(
+  myPricesStream,
+  name: r'myPricesStreamProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$myPricesStreamHash,
   dependencies: null,
   allTransitiveDependencies: null,
 );
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
-typedef PosServiceRef = AutoDisposeProviderRef<PosService>;
+typedef MyPricesStreamRef = AutoDisposeStreamProviderRef<List<PriceItem>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

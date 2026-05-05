@@ -1,55 +1,46 @@
 // lib/core/providers/router_provider.dart
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../screens/dashboard_screen.dart';
 import '../../screens/login_screen.dart';
+import '../../screens/shell_screen.dart';
 import 'auth_provider.dart';
 
-/// Notifies [GoRouter] when Firebase auth state changes.
-class GoRouterRefreshNotifier extends ChangeNotifier {
-  GoRouterRefreshNotifier(FirebaseAuth auth) {
-    _subscription = auth.authStateChanges().listen((_) => notifyListeners());
+class _AuthRefresh extends ChangeNotifier {
+  _AuthRefresh(FirebaseAuth auth) {
+    _sub = auth.authStateChanges().listen((_) => notifyListeners());
   }
-
-  late final StreamSubscription<User?> _subscription;
+  late final StreamSubscription<User?> _sub;
 
   @override
   void dispose() {
-    unawaited(_subscription.cancel());
+    unawaited(_sub.cancel());
     super.dispose();
   }
 }
 
-final _routerRefreshProvider = Provider<GoRouterRefreshNotifier>((ref) {
-  final auth = ref.watch(firebaseAuthProvider);
-  final notifier = GoRouterRefreshNotifier(auth);
-  ref.onDispose(notifier.dispose);
-  return notifier;
+final _authRefreshProvider = Provider<_AuthRefresh>((ref) {
+  final n = _AuthRefresh(ref.watch(firebaseAuthProvider));
+  ref.onDispose(n.dispose);
+  return n;
 });
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final refresh = ref.watch(_routerRefreshProvider);
+  final refresh = ref.watch(_authRefreshProvider);
 
   return GoRouter(
     initialLocation: '/login',
     refreshListenable: refresh,
     redirect: (context, state) {
-      final user = FirebaseAuth.instance.currentUser;
-      final loggingIn = state.matchedLocation == '/login';
+      final isLoggedIn = FirebaseAuth.instance.currentUser != null;
+      final onLogin = state.matchedLocation == '/login';
 
-      if (user == null) {
-        return loggingIn ? null : '/login';
-      }
-
-      if (loggingIn) {
-        return '/';
-      }
-
+      if (!isLoggedIn) return onLogin ? null : '/login';
+      if (onLogin) return '/';
       return null;
     },
     routes: [
@@ -61,7 +52,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/',
         name: 'home',
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => const ShellScreen(),
       ),
     ],
   );

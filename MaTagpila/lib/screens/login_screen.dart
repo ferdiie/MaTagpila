@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../core/theme/app_theme.dart';
@@ -25,6 +26,8 @@ class _AuthScreenState extends State<AuthScreen>
   final _signEmail = TextEditingController();
   final _signPass = TextEditingController();
   final _signConfirm = TextEditingController();
+  final _signName = TextEditingController();
+  final _signStoreName = TextEditingController();
   bool _signPassShow = false;
   bool _signConfirmShow = false;
 
@@ -45,6 +48,8 @@ class _AuthScreenState extends State<AuthScreen>
     _signEmail.dispose();
     _signPass.dispose();
     _signConfirm.dispose();
+    _signName.dispose();
+    _signStoreName.dispose();
     super.dispose();
   }
 
@@ -53,12 +58,17 @@ class _AuthScreenState extends State<AuthScreen>
   Future<void> _login() async {
     _setLoading(true);
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _loginEmail.text.trim(),
         password: _loginPass.text,
       );
+
+      // Auto-create user doc if it doesn't exist yet
+      await _ensureUserDocument(credential.user!);
     } on FirebaseAuthException catch (e) {
       _setError(e.code);
+    } catch (e) {
+      _setError('unknown');
     } finally {
       _setLoading(false);
     }
@@ -69,17 +79,71 @@ class _AuthScreenState extends State<AuthScreen>
       setState(() => _error = 'Passwords do not match.');
       return;
     }
+    if (_signName.text.trim().isEmpty) {
+      setState(() => _error = 'Please enter your name.');
+      return;
+    }
+    if (_signStoreName.text.trim().isEmpty) {
+      setState(() => _error = 'Please enter your store name.');
+      return;
+    }
+
     _setLoading(true);
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final credential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _signEmail.text.trim(),
         password: _signPass.text,
       );
+
+      // Create the Firestore user document immediately after registration
+      await _createUserDocument(
+        user: credential.user!,
+        name: _signName.text.trim(),
+        storeName: _signStoreName.text.trim(),
+        role: 'admin', // First registered user is always admin/owner
+      );
     } on FirebaseAuthException catch (e) {
       _setError(e.code);
+    } catch (e) {
+      _setError('unknown');
     } finally {
       _setLoading(false);
     }
+  }
+
+  /// Checks if the user already has a Firestore document.
+  /// If not, creates one with default admin role.
+  Future<void> _ensureUserDocument(User user) async {
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final doc = await docRef.get();
+
+    if (!doc.exists) {
+      await _createUserDocument(
+        user: user,
+        name: user.displayName ?? user.email?.split('@').first ?? 'User',
+        storeName: 'My Store',
+        role: 'admin',
+      );
+    }
+  }
+
+  /// Creates a Firestore user document with the given details.
+  Future<void> _createUserDocument({
+    required User user,
+    required String name,
+    required String storeName,
+    required String role,
+  }) async {
+    final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    await docRef.set({
+      'uid': user.uid,
+      'name': name,
+      'storeName': storeName,
+      'role': role,
+      'email': user.email,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
   Future<void> _forgotPassword() async {
@@ -215,6 +279,8 @@ class _AuthScreenState extends State<AuthScreen>
                                   emailCtrl: _signEmail,
                                   passCtrl: _signPass,
                                   confirmCtrl: _signConfirm,
+                                  nameCtrl: _signName,
+                                  storeNameCtrl: _signStoreName,
                                   passVisible: _signPassShow,
                                   confirmVisible: _signConfirmShow,
                                   onTogglePass: () => setState(
@@ -565,7 +631,11 @@ class _LoginForm extends StatelessWidget {
 // ── Sign-up form ──────────────────────────────────────────────────────────────
 
 class _SignupForm extends StatelessWidget {
-  final TextEditingController emailCtrl, passCtrl, confirmCtrl;
+  final TextEditingController emailCtrl,
+      passCtrl,
+      confirmCtrl,
+      nameCtrl,
+      storeNameCtrl;
   final bool passVisible, confirmVisible, loading;
   final VoidCallback onTogglePass, onToggleConfirm, onSubmit;
 
@@ -573,6 +643,8 @@ class _SignupForm extends StatelessWidget {
     required this.emailCtrl,
     required this.passCtrl,
     required this.confirmCtrl,
+    required this.nameCtrl,
+    required this.storeNameCtrl,
     required this.passVisible,
     required this.confirmVisible,
     required this.onTogglePass,
@@ -588,6 +660,20 @@ class _SignupForm extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _Field(
+            controller: nameCtrl,
+            hint: 'Your full name',
+            icon: Icons.person_outline_rounded,
+            keyboardType: TextInputType.name,
+          ),
+          const SizedBox(height: 12),
+          _Field(
+            controller: storeNameCtrl,
+            hint: 'Store name',
+            icon: Icons.storefront_outlined,
+            keyboardType: TextInputType.text,
+          ),
+          const SizedBox(height: 12),
           _Field(
             controller: emailCtrl,
             hint: 'Email address',
@@ -697,7 +783,6 @@ class _GoogleButton extends StatelessWidget {
               'assets/images/favicon.ico',
               width: 20,
               height: 20,
-              // If the file is missing or corrupted, show the fallback icon
               errorBuilder: (context, error, stackTrace) =>
                   const Icon(Icons.g_mobiledata, size: 22),
             ),
