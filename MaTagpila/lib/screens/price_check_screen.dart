@@ -131,7 +131,7 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
           // Recent list from stream
           allAsync.when(
             data: (items) => items.isEmpty
-                ? SliverToBoxAdapter(
+                ? const SliverToBoxAdapter(
                     child: _EmptyState(
                         message: 'No items yet. Be the first to add!'),
                   )

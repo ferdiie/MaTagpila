@@ -278,7 +278,7 @@ class _DropdownField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

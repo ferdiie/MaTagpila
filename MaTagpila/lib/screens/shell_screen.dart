@@ -7,7 +7,7 @@ import 'add_item_screen.dart';
 import 'price_check_screen.dart';
 import 'history_screen.dart';
 import 'profile_screen.dart';
-import 'sales_screen.dart';
+import 'pos_screen.dart';
 
 // ─────────────────────────────────────────────
 //  NAV ITEM DEFINITION
@@ -66,7 +66,7 @@ class ShellScreen extends ConsumerWidget {
   static const _screens = [
     PriceCheckScreen(),
     AddItemScreen(),
-    SalesScreen(),
+    PosScreen(),
     HistoryScreen(),
     ProfileScreen(),
   ];
@@ -275,7 +275,7 @@ class _BottomNav extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 64,
+          height: 72,
           child: Row(
             children: List.generate(
               _navItems.length,
@@ -308,24 +308,34 @@ class _BottomNavItem extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              isActive ? item.activeIcon : item.icon,
-              size: 22,
-              color: isActive ? AppColors.orange : AppColors.textMuted,
-            ),
-            const SizedBox(height: 3),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isActive ? item.activeIcon : item.icon,
+                size: 20,
                 color: isActive ? AppColors.orange : AppColors.textMuted,
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Flexible(
+                child: Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 9,
+                    height: 1.1,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                    color: isActive ? AppColors.orange : AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

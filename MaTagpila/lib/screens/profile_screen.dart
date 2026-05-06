@@ -50,7 +50,7 @@ class ProfileScreen extends ConsumerWidget {
             value: email,
           ),
           const SizedBox(height: 12),
-          _InfoCard(
+          const _InfoCard(
             icon: Icons.storefront_rounded,
             label: 'Contributor',
             value: 'Ma.Tagpila Community',

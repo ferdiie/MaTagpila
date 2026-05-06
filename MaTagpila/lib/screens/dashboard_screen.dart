@@ -1,12 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/models/app_user.dart';
-import '../features/shared/models/item_model.dart';
-import '../features/shared/services/firestore_services.dart';
+import 'pos_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -66,73 +64,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userAsync = ref.watch(currentAppUserProvider);
+    final email = FirebaseAuth.instance.currentUser?.email?.toLowerCase() ?? '';
+    final role = email.startsWith('admin') ? UserRole.admin : UserRole.cashier;
+    final tabs = _tabsForRole(role);
+    final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
 
-    return userAsync.when(
-      // ── Data: user document found ──────────────────────────────────────────
-      data: (user) {
-        // If user doc doesn't exist in Firestore yet, fall back to Firebase Auth
-        final role = user?.role ?? UserRole.cashier;
-        final tabs = _tabsForRole(role);
-        final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
+    if (role == UserRole.admin) {
+      _maybeShowYesterdayPrompt();
+    }
 
-        // Show prompt only for admins on first load
-        if (role == UserRole.admin) {
-          _maybeShowYesterdayPrompt();
-        }
-
-        return Scaffold(
-          backgroundColor: AppColors.cream,
-          body: SafeArea(bottom: false, child: tabs[index].screen),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: index,
-            selectedItemColor: AppColors.orange,
-            unselectedItemColor: AppColors.textGrey,
-            onTap: (value) => setState(() => _tabIndex = value),
-            type: BottomNavigationBarType.fixed,
-            items: tabs
-                .map(
-                  (tab) => BottomNavigationBarItem(
-                    icon: Icon(tab.icon),
-                    label: tab.label,
-                  ),
-                )
-                .toList(),
-          ),
-        );
-      },
-
-      // ── Loading ────────────────────────────────────────────────────────────
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+    return Scaffold(
+      backgroundColor: AppColors.cream,
+      body: SafeArea(bottom: false, child: tabs[index].screen),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: index,
+        selectedItemColor: AppColors.orange,
+        unselectedItemColor: AppColors.textGrey,
+        onTap: (value) => setState(() => _tabIndex = value),
+        type: BottomNavigationBarType.fixed,
+        items: tabs
+            .map(
+              (tab) => BottomNavigationBarItem(
+                icon: Icon(tab.icon),
+                label: tab.label,
+              ),
+            )
+            .toList(),
       ),
-
-      // ── Error: show dashboard anyway using Firebase Auth fallback ──────────
-      error: (err, stack) {
-        // Still show the app — user is authenticated, just Firestore fetch failed
-        final tabs = _tabsForRole(UserRole.cashier);
-        final index = _tabIndex >= tabs.length ? 0 : _tabIndex;
-
-        return Scaffold(
-          backgroundColor: AppColors.cream,
-          body: SafeArea(bottom: false, child: tabs[index].screen),
-          bottomNavigationBar: BottomNavigationBar(
-            currentIndex: index,
-            selectedItemColor: AppColors.orange,
-            unselectedItemColor: AppColors.textGrey,
-            onTap: (value) => setState(() => _tabIndex = value),
-            type: BottomNavigationBarType.fixed,
-            items: tabs
-                .map(
-                  (tab) => BottomNavigationBarItem(
-                    icon: Icon(tab.icon),
-                    label: tab.label,
-                  ),
-                )
-                .toList(),
-          ),
-        );
-      },
     );
   }
 
@@ -149,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         const _TabData(
           label: 'POS',
           icon: Icons.point_of_sale_rounded,
-          screen: PosTerminalScreen(),
+          screen: PosScreen(),
         ),
         const _TabData(
           label: 'Price Checker',
@@ -174,7 +132,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       const _TabData(
         label: 'POS',
         icon: Icons.point_of_sale_rounded,
-        screen: PosTerminalScreen(),
+        screen: PosScreen(),
       ),
       const _TabData(
         label: 'Price Checker',
@@ -350,154 +308,6 @@ class _SimpleTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Text('$title module in progress', style: AppTextStyles.headingMd),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  POS Terminal
-// ═══════════════════════════════════════════════════════════════════════════
-
-class PosTerminalScreen extends ConsumerWidget {
-  const PosTerminalScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final itemsAsync = ref.watch(itemsStreamProvider);
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    return itemsAsync.when(
-      data: (items) {
-        return _PosContent(items: items, cashierId: currentUser?.uid ?? '');
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, __) =>
-          const Center(child: Text('Unable to load inventory items')),
-    );
-  }
-}
-
-class _PosContent extends ConsumerStatefulWidget {
-  final List<ItemModel> items;
-  final String cashierId;
-
-  const _PosContent({
-    required this.items,
-    required this.cashierId,
-  });
-
-  @override
-  ConsumerState<_PosContent> createState() => _PosContentState();
-}
-
-class _PosContentState extends ConsumerState<_PosContent> {
-  final Map<String, int> _cart = {};
-  bool _isCheckingOut = false;
-
-  double get _totalAmount {
-    return _cart.entries.fold(0, (total, entry) {
-      final item = widget.items.firstWhere((e) => e.id == entry.key);
-      return total + (item.price * entry.value);
-    });
-  }
-
-  Future<void> _checkout() async {
-    if (_cart.isEmpty) return;
-    setState(() => _isCheckingOut = true);
-
-    try {
-      final lines = _cart.entries.map((entry) {
-        final item = widget.items.firstWhere((e) => e.id == entry.key);
-        return PosCheckoutItem(
-          itemId: item.id,
-          qty: entry.value,
-          priceAtSale: item.price,
-        );
-      }).toList();
-
-      await ref.read(posServiceProvider).checkout(
-            cashierId: widget.cashierId,
-            items: lines,
-          );
-
-      if (mounted) {
-        setState(() => _cart.clear());
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Sale completed successfully.')),
-        );
-      }
-    } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.toString())),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isCheckingOut = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final formatter = NumberFormat.currency(symbol: 'PHP ');
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        Text('POS Terminal', style: AppTextStyles.displayMd),
-        const SizedBox(height: 12),
-        ...widget.items.map((item) {
-          final qty = _cart[item.id] ?? 0;
-          return Card(
-            child: ListTile(
-              title: Text(item.name),
-              subtitle: Text(
-                '${formatter.format(item.price)} • Stock: ${item.stockQty}',
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    onPressed: qty > 0
-                        ? () => setState(() {
-                              final next = qty - 1;
-                              if (next == 0) {
-                                _cart.remove(item.id);
-                              } else {
-                                _cart[item.id] = next;
-                              }
-                            })
-                        : null,
-                    icon: const Icon(Icons.remove_circle_outline),
-                  ),
-                  Text('$qty'),
-                  IconButton(
-                    onPressed: qty < item.stockQty
-                        ? () => setState(() => _cart[item.id] = qty + 1)
-                        : null,
-                    icon: const Icon(Icons.add_circle_outline),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }),
-        const SizedBox(height: 12),
-        Text('Total: ${formatter.format(_totalAmount)}',
-            style: AppTextStyles.headingLg),
-        const SizedBox(height: 10),
-        ElevatedButton.icon(
-          onPressed: _isCheckingOut ? null : _checkout,
-          icon: _isCheckingOut
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.payment_rounded),
-          label: const Text('Checkout'),
-        ),
-      ],
     );
   }
 }

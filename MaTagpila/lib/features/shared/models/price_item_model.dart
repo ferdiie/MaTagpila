@@ -32,7 +32,7 @@ class PriceItem extends Equatable {
   });
 
   factory PriceItem.fromMap(String id, Map<String, dynamic> data) {
-    DateTime _toDate(dynamic v) {
+    DateTime toDate(dynamic v) {
       if (v is Timestamp) return v.toDate();
       if (v is String) return DateTime.tryParse(v) ?? DateTime.now();
       return DateTime.now();
@@ -49,8 +49,8 @@ class PriceItem extends Equatable {
       addedBy: (data['addedBy'] ?? '') as String,
       barcode: data['barcode'] as String?,
       imageUrl: data['imageUrl'] as String?,
-      updatedAt: _toDate(data['updatedAt']),
-      createdAt: _toDate(data['createdAt']),
+      updatedAt: toDate(data['updatedAt']),
+      createdAt: toDate(data['createdAt']),
     );
   }
 
