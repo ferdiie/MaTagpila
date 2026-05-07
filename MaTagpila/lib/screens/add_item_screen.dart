@@ -197,26 +197,6 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Store
-            _Field(
-              label: 'Store / Market',
-              hint: 'e.g. Froy and Frex Store, Tagbilaran Market',
-              controller: _storeCtrl,
-              validator: (v) => (v == null || v.trim().isEmpty)
-                  ? 'Store name is required'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-
-            // Barcode (optional)
-            _Field(
-              label: 'Barcode (optional)',
-              hint: 'Scan or type barcode',
-              controller: _barcodeCtrl,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 32),
-
             // Submit button
             SizedBox(
               width: double.infinity,
