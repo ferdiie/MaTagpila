@@ -202,8 +202,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final categoriesAsync = ref.watch(dashboardCategoriesProvider);
-    final filteredProductsAsync = ref.watch(dashboardFilteredProductsProvider(_query));
+    final filteredProductsAsync =
+        ref.watch(dashboardFilteredProductsProvider(_query));
+    final recentProductsAsync = ref.watch(dashboardRecentProductsProvider);
     final selectedCategory = ref.watch(selectedDashboardCategoryProvider);
+    final categoryColorMap = ref.watch(dashboardCategoryColorMapProvider);
     final currency = NumberFormat.currency(symbol: 'PHP ', decimalDigits: 2);
     final dateFmt = DateFormat('MMM d, y');
 
@@ -284,7 +287,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
         ),
         filteredProductsAsync.when(
           data: (filteredProducts) {
-            final recentItems = filteredProducts.take(8).toList();
+            final recentItems =
+                recentProductsAsync.valueOrNull?.take(8).toList() ?? [];
             final categoryOptions =
                 categoriesAsync.valueOrNull ?? const [allCategoryFilter];
 
@@ -296,10 +300,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               });
             }
 
+            final allProducts = recentProductsAsync.valueOrNull ?? [];
+
             final topItemName = () {
-              if (filteredProducts.isEmpty) return '-';
+              if (allProducts.isEmpty) return '-';
               final nameCounts = <String, int>{};
-              for (final item in filteredProducts) {
+              for (final item in allProducts) {
                 nameCounts[item.name] = (nameCounts[item.name] ?? 0) + 1;
               }
               final sortedNames = nameCounts.entries.toList()
@@ -308,7 +314,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             }();
 
             final totalValue =
-                filteredProducts.fold<double>(0, (sum, item) => sum + item.price);
+                allProducts.fold<double>(0, (sum, item) => sum + item.price);
 
             return SliverList(
               delegate: SliverChildListDelegate([
@@ -319,7 +325,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     children: [
                       Expanded(
                         child: _DashboardStatCard(
-                          value: '${filteredProducts.length}',
+                          value: '${allProducts.length}',
                           label: 'No. of Items',
                         ),
                       ),
@@ -368,7 +374,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   child: Row(
                     children: [
                       Text(
-                        _query.isEmpty ? 'Recent Price Changes' : 'Search Results',
+                        _query.isEmpty
+                            ? 'Recent Price Changes'
+                            : 'Search Results',
                         style: AppTextStyles.headingLg,
                       ),
                       const Spacer(),
@@ -385,9 +393,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   child: recentItems.isEmpty
                       ? Center(
                           child: Text(
-                            _query.isEmpty
-                                ? 'No recent price entries yet.'
-                                : 'No matching items.',
+                            'No recent price entries yet.',
                             style: AppTextStyles.bodyMd,
                           ),
                         )
@@ -395,7 +401,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           scrollDirection: Axis.horizontal,
                           itemCount: recentItems.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 10),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 10),
                           itemBuilder: (_, index) => _RecentPriceCard(
                             item: recentItems[index],
                             currency: currency,
@@ -406,7 +413,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 const SizedBox(height: 18),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text('Browse by Category', style: AppTextStyles.headingLg),
+                  child: Text('Browse by Category',
+                      style: AppTextStyles.headingLg),
                 ),
                 DashboardCategoryFilterBar(
                   categories: categoryOptions,
@@ -448,17 +456,19 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                               'grid-$selectedCategory-${filteredProducts.length}-$_query',
                             ),
                             builder: (context, constraints) {
-                              final crossAxisCount = constraints.maxWidth >= 560 ? 3 : 2;
-                              final cardWidth =
-                                  (constraints.maxWidth - ((crossAxisCount - 1) * 12)) /
-                                      crossAxisCount;
+                              final crossAxisCount =
+                                  constraints.maxWidth >= 560 ? 3 : 2;
+                              final cardWidth = (constraints.maxWidth -
+                                      ((crossAxisCount - 1) * 12)) /
+                                  crossAxisCount;
                               final childAspectRatio = cardWidth / 122;
 
                               return GridView.builder(
                                 itemCount: filteredProducts.length,
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: crossAxisCount,
                                   crossAxisSpacing: 12,
                                   mainAxisSpacing: 12,
@@ -467,7 +477,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                                 itemBuilder: (_, index) => DashboardProductCard(
                                   item: filteredProducts[index],
                                   currency: currency,
-                                  accent: _categoryColor(index),
+                                  accent: _categoryColor(
+                                    categoryColorMap[
+                                            filteredProducts[index].category] ??
+                                        0,
+                                  ),
                                 ),
                               );
                             },
@@ -598,7 +612,8 @@ class _RecentPriceCard extends StatelessWidget {
           const Spacer(),
           Text(
             currency.format(item.price),
-            style: AppTextStyles.headingMd.copyWith(color: AppColors.orangeDark),
+            style:
+                AppTextStyles.headingMd.copyWith(color: AppColors.orangeDark),
           ),
           Text('Updated ${dateFmt.format(item.updatedAt)}',
               style: AppTextStyles.bodySm),

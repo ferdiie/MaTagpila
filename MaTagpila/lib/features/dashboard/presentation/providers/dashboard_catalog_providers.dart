@@ -27,6 +27,23 @@ final dashboardCategoriesProvider = Provider<AsyncValue<List<String>>>((ref) {
   });
 });
 
+/// All products unaffected by category filter — used for Recent Price Changes.
+final dashboardRecentProductsProvider =
+    Provider<AsyncValue<List<PriceItem>>>((ref) {
+  final productsAsync = ref.watch(dashboardProductsProvider);
+  return productsAsync.whenData((items) =>
+      [...items]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)));
+});
+
+/// Stable color index keyed by category name (derived from sorted category list).
+final dashboardCategoryColorMapProvider = Provider<Map<String, int>>((ref) {
+  final categories = ref.watch(dashboardCategoriesProvider).valueOrNull ?? [];
+  // Skip the 'All' entry at index 0 so real categories start at index 0
+  final realCategories =
+      categories.where((c) => c != allCategoryFilter).toList();
+  return {for (var i = 0; i < realCategories.length; i++) realCategories[i]: i};
+});
+
 final dashboardFilteredProductsProvider =
     Provider.family<AsyncValue<List<PriceItem>>, String>((ref, query) {
   final productsAsync = ref.watch(dashboardProductsProvider);
