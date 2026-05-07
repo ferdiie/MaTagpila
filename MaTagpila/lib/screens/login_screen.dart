@@ -14,6 +14,10 @@ class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
+  // Form keys for validation
+  final _loginFormKey = GlobalKey<FormState>();
+  final _signupFormKey = GlobalKey<FormState>();
+
   bool _loading = false;
   String? _error;
 
@@ -53,17 +57,32 @@ class _AuthScreenState extends State<AuthScreen>
     super.dispose();
   }
 
+  // ── Validation Helpers ─────────────────────────────────────────────────────
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) return 'Email is required';
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) return 'Enter a valid email address';
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) return 'Password is required';
+    if (value.length < 6) return 'Password must be at least 6 characters';
+    return null;
+  }
+
   // ── Auth actions ───────────────────────────────────────────────────────────
 
   Future<void> _login() async {
+    if (!_loginFormKey.currentState!.validate()) return;
+
     _setLoading(true);
     try {
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _loginEmail.text.trim(),
         password: _loginPass.text,
       );
-
-      // Auto-create user doc if it doesn't exist yet
       await _ensureUserDocument(credential.user!);
     } on FirebaseAuthException catch (e) {
       _setError(e.code);
@@ -75,18 +94,7 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _register() async {
-    if (_signPass.text != _signConfirm.text) {
-      setState(() => _error = 'Passwords do not match.');
-      return;
-    }
-    if (_signName.text.trim().isEmpty) {
-      setState(() => _error = 'Please enter your name.');
-      return;
-    }
-    if (_signStoreName.text.trim().isEmpty) {
-      setState(() => _error = 'Please enter your store name.');
-      return;
-    }
+    if (!_signupFormKey.currentState!.validate()) return;
 
     _setLoading(true);
     try {
@@ -96,12 +104,11 @@ class _AuthScreenState extends State<AuthScreen>
         password: _signPass.text,
       );
 
-      // Create the Firestore user document immediately after registration
       await _createUserDocument(
         user: credential.user!,
         name: _signName.text.trim(),
         storeName: _signStoreName.text.trim(),
-        role: 'admin', // First registered user is always admin/owner
+        role: 'admin',
       );
     } on FirebaseAuthException catch (e) {
       _setError(e.code);
@@ -113,7 +120,6 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   /// Checks if the user already has a Firestore document.
-  /// If not, creates one with default admin role.
   Future<void> _ensureUserDocument(User user) async {
     final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final doc = await docRef.get();
@@ -128,7 +134,7 @@ class _AuthScreenState extends State<AuthScreen>
     }
   }
 
-  /// Creates a Firestore user document with the given details.
+  /// Creates a Firestore user document.
   Future<void> _createUserDocument({
     required User user,
     required String name,
@@ -190,8 +196,6 @@ class _AuthScreenState extends State<AuthScreen>
         _ => 'Something went wrong. Please try again.',
       };
 
-  // ── Build ──────────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
@@ -200,15 +204,12 @@ class _AuthScreenState extends State<AuthScreen>
       backgroundColor: AppColors.cream,
       body: Stack(
         children: [
-          // Decorative background blobs
           _blob(200, AppColors.orange.withAlpha((0.12 * 255).toInt()),
               top: -60, right: -60),
           _blob(120, AppColors.orangeLight.withAlpha((0.10 * 255).toInt()),
               top: size.height * 0.22, left: -40),
           _blob(260, AppColors.orange.withAlpha((0.08 * 255).toInt()),
               bottom: -80, left: -40),
-
-          // Content
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -232,8 +233,6 @@ class _AuthScreenState extends State<AuthScreen>
                     style: TextStyle(fontSize: 13, color: AppColors.textGrey),
                   ),
                   const SizedBox(height: 36),
-
-                  // ── Card ──
                   AnimatedSize(
                     duration: const Duration(milliseconds: 280),
                     curve: Curves.easeOutCubic,
@@ -253,19 +252,17 @@ class _AuthScreenState extends State<AuthScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Segmented tabs
                           Padding(
                             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                             child: _SegmentedTabs(controller: _tab),
                           ),
-
-                          // Forms
                           AnimatedBuilder(
                             animation: _tab,
                             builder: (context, child) => IndexedStack(
                               index: _tab.index,
                               children: [
                                 _LoginForm(
+                                  formKey: _loginFormKey,
                                   emailCtrl: _loginEmail,
                                   passCtrl: _loginPass,
                                   passVisible: _loginPassShow,
@@ -274,8 +271,11 @@ class _AuthScreenState extends State<AuthScreen>
                                   onSubmit: _login,
                                   onForgot: _forgotPassword,
                                   loading: _loading,
+                                  emailValidator: _validateEmail,
+                                  passValidator: _validatePassword,
                                 ),
                                 _SignupForm(
+                                  formKey: _signupFormKey,
                                   emailCtrl: _signEmail,
                                   passCtrl: _signPass,
                                   confirmCtrl: _signConfirm,
@@ -289,12 +289,12 @@ class _AuthScreenState extends State<AuthScreen>
                                       _signConfirmShow = !_signConfirmShow),
                                   onSubmit: _register,
                                   loading: _loading,
+                                  emailValidator: _validateEmail,
+                                  passValidator: _validatePassword,
                                 ),
                               ],
                             ),
                           ),
-
-                          // Error banner
                           if (_error != null)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -306,10 +306,7 @@ class _AuthScreenState extends State<AuthScreen>
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 24),
-
-                  // Divider
                   Row(children: [
                     const Expanded(child: Divider(color: Color(0xFFE8E0D8))),
                     Padding(
@@ -322,11 +319,9 @@ class _AuthScreenState extends State<AuthScreen>
                     ),
                     const Expanded(child: Divider(color: Color(0xFFE8E0D8))),
                   ]),
-
                   const SizedBox(height: 16),
                   _GoogleButton(onTap: () {}),
                   const SizedBox(height: 28),
-
                   Text(
                     'By continuing, you agree to our Terms & Privacy Policy.',
                     textAlign: TextAlign.center,
@@ -345,7 +340,6 @@ class _AuthScreenState extends State<AuthScreen>
     );
   }
 
-  // Helper: positioned blob
   Widget _blob(double size, Color color,
       {double? top, double? bottom, double? left, double? right}) {
     return Positioned(
@@ -473,6 +467,7 @@ class _Field extends StatelessWidget {
   final bool obscure;
   final Widget? suffix;
   final TextInputType? keyboardType;
+  final String? Function(String?)? validator;
 
   const _Field({
     required this.controller,
@@ -481,6 +476,7 @@ class _Field extends StatelessWidget {
     this.obscure = false,
     this.suffix,
     this.keyboardType,
+    this.validator,
   });
 
   @override
@@ -490,10 +486,11 @@ class _Field extends StatelessWidget {
         color: AppColors.inputBg,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: TextField(
+      child: TextFormField(
         controller: controller,
         obscureText: obscure,
         keyboardType: keyboardType,
+        validator: validator,
         style: const TextStyle(
             fontSize: 14,
             color: AppColors.textDark,
@@ -507,6 +504,8 @@ class _Field extends StatelessWidget {
           suffixIcon: suffix,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
+          // Adding error styling
+          errorStyle: const TextStyle(height: 0.8, fontSize: 11),
         ),
       ),
     );
@@ -563,11 +562,14 @@ class _PrimaryButton extends StatelessWidget {
 // ── Login form ────────────────────────────────────────────────────────────────
 
 class _LoginForm extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
   final TextEditingController emailCtrl, passCtrl;
   final bool passVisible, loading;
   final VoidCallback onTogglePass, onSubmit, onForgot;
+  final String? Function(String?) emailValidator, passValidator;
 
   const _LoginForm({
+    required this.formKey,
     required this.emailCtrl,
     required this.passCtrl,
     required this.passVisible,
@@ -575,54 +577,62 @@ class _LoginForm extends StatelessWidget {
     required this.onSubmit,
     required this.onForgot,
     required this.loading,
+    required this.emailValidator,
+    required this.passValidator,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Field(
-            controller: emailCtrl,
-            hint: 'Email address',
-            icon: Icons.mail_outline_rounded,
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            controller: passCtrl,
-            hint: 'Password',
-            icon: Icons.lock_outline_rounded,
-            obscure: !passVisible,
-            suffix: IconButton(
-              icon: Icon(
-                passVisible
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textGrey,
-                size: 20,
-              ),
-              onPressed: onTogglePass,
+      child: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Field(
+              controller: emailCtrl,
+              hint: 'Email address',
+              icon: Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress,
+              validator: emailValidator,
             ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: onForgot,
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.orange,
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 36),
+            const SizedBox(height: 12),
+            _Field(
+              controller: passCtrl,
+              hint: 'Password',
+              icon: Icons.lock_outline_rounded,
+              obscure: !passVisible,
+              validator: passValidator,
+              suffix: IconButton(
+                icon: Icon(
+                  passVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.textGrey,
+                  size: 20,
+                ),
+                onPressed: onTogglePass,
               ),
-              child: const Text('Forgot password?',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
             ),
-          ),
-          _PrimaryButton(label: 'Log In', onTap: onSubmit, loading: loading),
-          const SizedBox(height: 8),
-        ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onForgot,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.orange,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 36),
+                ),
+                child: const Text('Forgot password?',
+                    style:
+                        TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            _PrimaryButton(label: 'Log In', onTap: onSubmit, loading: loading),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -631,6 +641,7 @@ class _LoginForm extends StatelessWidget {
 // ── Sign-up form ──────────────────────────────────────────────────────────────
 
 class _SignupForm extends StatelessWidget {
+  final GlobalKey<FormState> formKey;
   final TextEditingController emailCtrl,
       passCtrl,
       confirmCtrl,
@@ -638,8 +649,10 @@ class _SignupForm extends StatelessWidget {
       storeNameCtrl;
   final bool passVisible, confirmVisible, loading;
   final VoidCallback onTogglePass, onToggleConfirm, onSubmit;
+  final String? Function(String?) emailValidator, passValidator;
 
   const _SignupForm({
+    required this.formKey,
     required this.emailCtrl,
     required this.passCtrl,
     required this.confirmCtrl,
@@ -651,74 +664,89 @@ class _SignupForm extends StatelessWidget {
     required this.onToggleConfirm,
     required this.onSubmit,
     required this.loading,
+    required this.emailValidator,
+    required this.passValidator,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _Field(
-            controller: nameCtrl,
-            hint: 'Your full name',
-            icon: Icons.person_outline_rounded,
-            keyboardType: TextInputType.name,
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            controller: storeNameCtrl,
-            hint: 'Store name',
-            icon: Icons.storefront_outlined,
-            keyboardType: TextInputType.text,
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            controller: emailCtrl,
-            hint: 'Email address',
-            icon: Icons.mail_outline_rounded,
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            controller: passCtrl,
-            hint: 'Password',
-            icon: Icons.lock_outline_rounded,
-            obscure: !passVisible,
-            suffix: IconButton(
-              icon: Icon(
-                passVisible
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textGrey,
-                size: 20,
-              ),
-              onPressed: onTogglePass,
+      child: Form(
+        key: formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _Field(
+              controller: nameCtrl,
+              hint: 'Your full name',
+              icon: Icons.person_outline_rounded,
+              keyboardType: TextInputType.name,
+              validator: (v) =>
+                  v == null || v.isEmpty ? 'Name is required' : null,
             ),
-          ),
-          const SizedBox(height: 12),
-          _Field(
-            controller: confirmCtrl,
-            hint: 'Confirm password',
-            icon: Icons.lock_outline_rounded,
-            obscure: !confirmVisible,
-            suffix: IconButton(
-              icon: Icon(
-                confirmVisible
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textGrey,
-                size: 20,
-              ),
-              onPressed: onToggleConfirm,
+            const SizedBox(height: 12),
+            _Field(
+              controller: storeNameCtrl,
+              hint: 'Store name',
+              icon: Icons.storefront_outlined,
+              keyboardType: TextInputType.text,
+              validator: (v) =>
+                  v == null || v.isEmpty ? 'Store name is required' : null,
             ),
-          ),
-          const SizedBox(height: 20),
-          _PrimaryButton(
-              label: 'Create Account', onTap: onSubmit, loading: loading),
-          const SizedBox(height: 8),
-        ],
+            const SizedBox(height: 12),
+            _Field(
+              controller: emailCtrl,
+              hint: 'Email address',
+              icon: Icons.mail_outline_rounded,
+              keyboardType: TextInputType.emailAddress,
+              validator: emailValidator,
+            ),
+            const SizedBox(height: 12),
+            _Field(
+              controller: passCtrl,
+              hint: 'Password',
+              icon: Icons.lock_outline_rounded,
+              obscure: !passVisible,
+              validator: passValidator,
+              suffix: IconButton(
+                icon: Icon(
+                  passVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.textGrey,
+                  size: 20,
+                ),
+                onPressed: onTogglePass,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _Field(
+              controller: confirmCtrl,
+              hint: 'Confirm password',
+              icon: Icons.lock_outline_rounded,
+              obscure: !confirmVisible,
+              validator: (v) {
+                if (v != passCtrl.text) return 'Passwords do not match';
+                return null;
+              },
+              suffix: IconButton(
+                icon: Icon(
+                  confirmVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.textGrey,
+                  size: 20,
+                ),
+                onPressed: onToggleConfirm,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _PrimaryButton(
+                label: 'Create Account', onTap: onSubmit, loading: loading),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
