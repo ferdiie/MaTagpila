@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/dashboard/presentation/providers/dashboard_catalog_providers.dart';
+import '../features/dashboard/presentation/widgets/dashboard_category_filter_bar.dart';
+import '../features/dashboard/presentation/widgets/dashboard_product_card.dart';
 import '../features/shared/models/app_user.dart';
 import '../features/shared/models/price_item_model.dart';
-import '../features/shared/services/firestore_services.dart';
 import 'pos_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -199,7 +201,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final pricesAsync = ref.watch(allPricesStreamProvider);
+    final categoriesAsync = ref.watch(dashboardCategoriesProvider);
+    final filteredProductsAsync = ref.watch(dashboardFilteredProductsProvider(_query));
+    final selectedCategory = ref.watch(selectedDashboardCategoryProvider);
     final currency = NumberFormat.currency(symbol: 'PHP ', decimalDigits: 2);
     final dateFmt = DateFormat('MMM d, y');
 
@@ -278,34 +282,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             ),
           ),
         ),
-        pricesAsync.when(
-          data: (items) {
-            final queryLower = _query.trim().toLowerCase();
-            final filtered = queryLower.isEmpty
-                ? items
-                : items
-                    .where((item) =>
-                        item.nameLower.contains(queryLower) ||
-                        item.store.toLowerCase().contains(queryLower) ||
-                        item.category.toLowerCase().contains(queryLower))
-                    .toList();
-            final sortedByRecent = [...filtered]
-              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-            final recentItems = sortedByRecent.take(8).toList();
+        filteredProductsAsync.when(
+          data: (filteredProducts) {
+            final recentItems = filteredProducts.take(8).toList();
+            final categoryOptions =
+                categoriesAsync.valueOrNull ?? const [allCategoryFilter];
 
-            final categoryCount = <String, int>{};
-            for (final item in filtered) {
-              categoryCount[item.category] = (categoryCount[item.category] ?? 0) + 1;
+            if (!categoryOptions.contains(selectedCategory)) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                ref.read(selectedDashboardCategoryProvider.notifier).state =
+                    allCategoryFilter;
+              });
             }
-            final sortedCategories = categoryCount.entries.toList()
-              ..sort((a, b) => b.value.compareTo(a.value));
-            final categoryNames =
-                sortedCategories.map((entry) => entry.key).take(6).toList();
 
             final topItemName = () {
-              if (filtered.isEmpty) return '-';
+              if (filteredProducts.isEmpty) return '-';
               final nameCounts = <String, int>{};
-              for (final item in filtered) {
+              for (final item in filteredProducts) {
                 nameCounts[item.name] = (nameCounts[item.name] ?? 0) + 1;
               }
               final sortedNames = nameCounts.entries.toList()
@@ -314,19 +308,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             }();
 
             final totalValue =
-                filtered.fold<double>(0, (sum, item) => sum + item.price);
-
-            final featuredItems = <PriceItem>[];
-            for (final category in categoryNames.take(3)) {
-              final match = sortedByRecent.firstWhere(
-                (item) => item.category == category,
-                orElse: () => sortedByRecent.first,
-              );
-              featuredItems.add(match);
-            }
-            if (featuredItems.isEmpty) {
-              featuredItems.addAll(sortedByRecent.take(3));
-            }
+                filteredProducts.fold<double>(0, (sum, item) => sum + item.price);
 
             return SliverList(
               delegate: SliverChildListDelegate([
@@ -337,7 +319,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     children: [
                       Expanded(
                         child: _DashboardStatCard(
-                          value: '${filtered.length}',
+                          value: '${filteredProducts.length}',
                           label: 'No. of Items',
                         ),
                       ),
@@ -386,9 +368,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   child: Row(
                     children: [
                       Text(
-                        _query.isEmpty
-                            ? 'Recent Price Changes'
-                            : 'Search Results (${filtered.length})',
+                        _query.isEmpty ? 'Recent Price Changes' : 'Search Results',
                         style: AppTextStyles.headingLg,
                       ),
                       const Spacer(),
@@ -426,45 +406,73 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                 const SizedBox(height: 18),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text('Categories', style: AppTextStyles.headingLg),
+                  child: Text('Browse by Category', style: AppTextStyles.headingLg),
                 ),
+                DashboardCategoryFilterBar(
+                  categories: categoryOptions,
+                  selectedCategory: selectedCategory,
+                  onCategorySelected: (category) {
+                    ref.read(selectedDashboardCategoryProvider.notifier).state =
+                        category;
+                  },
+                ),
+                const SizedBox(height: 18),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: categoryNames.isEmpty
-                        ? [
-                            Text(
-                              'No categories yet.',
-                              style: AppTextStyles.bodyMd,
-                            ),
-                          ]
-                        : [
-                            for (var i = 0; i < categoryNames.length; i++)
-                              _CategoryChip(
-                                label: categoryNames[i],
-                                color: _categoryColor(i),
-                              ),
-                          ],
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text(
+                    selectedCategory == allCategoryFilter
+                        ? 'All Products (${filteredProducts.length})'
+                        : '$selectedCategory Products (${filteredProducts.length})',
+                    style: AppTextStyles.headingLg,
                   ),
                 ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 140,
-                  child: featuredItems.isEmpty
-                      ? const SizedBox.shrink()
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: featuredItems.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 12),
-                          itemBuilder: (_, index) => _FeaturedItemCard(
-                            item: featuredItems[index],
-                            currency: currency,
-                            accent: _categoryColor(index),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    child: filteredProducts.isEmpty
+                        ? SizedBox(
+                            key: ValueKey('empty-$selectedCategory-$_query'),
+                            height: 120,
+                            child: Center(
+                              child: Text(
+                                'No products found for this category.',
+                                style: AppTextStyles.bodyMd,
+                              ),
+                            ),
+                          )
+                        : LayoutBuilder(
+                            key: ValueKey(
+                              'grid-$selectedCategory-${filteredProducts.length}-$_query',
+                            ),
+                            builder: (context, constraints) {
+                              final crossAxisCount = constraints.maxWidth >= 560 ? 3 : 2;
+                              final cardWidth =
+                                  (constraints.maxWidth - ((crossAxisCount - 1) * 12)) /
+                                      crossAxisCount;
+                              final childAspectRatio = cardWidth / 122;
+
+                              return GridView.builder(
+                                itemCount: filteredProducts.length,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: crossAxisCount,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: childAspectRatio,
+                                ),
+                                itemBuilder: (_, index) => DashboardProductCard(
+                                  item: filteredProducts[index],
+                                  currency: currency,
+                                  accent: _categoryColor(index),
+                                ),
+                              );
+                            },
                           ),
-                        ),
+                  ),
                 ),
                 const SizedBox(height: 22),
               ]),
@@ -594,83 +602,6 @@ class _RecentPriceCard extends StatelessWidget {
           ),
           Text('Updated ${dateFmt.format(item.updatedAt)}',
               style: AppTextStyles.bodySm),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategoryChip extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _CategoryChip({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSm.copyWith(color: Colors.white),
-      ),
-    );
-  }
-}
-
-class _FeaturedItemCard extends StatelessWidget {
-  final PriceItem item;
-  final NumberFormat currency;
-  final Color accent;
-
-  const _FeaturedItemCard({
-    required this.item,
-    required this.currency,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 148,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      decoration: BoxDecoration(
-        color: AppColors.orangeSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 10,
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            item.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.headingLg,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            currency.format(item.price),
-            style: AppTextStyles.priceLg,
-          ),
-          Text(
-            item.category,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySm,
-          ),
         ],
       ),
     );
