@@ -183,7 +183,23 @@ class _PosHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Point of Sale', style: AppTextStyles.headingLg),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Point of Sale', style: AppTextStyles.headingLg),
+              ),
+              Image.asset(
+                'assets/images/logo.png',
+                height: 42,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.storefront_rounded,
+                  color: AppColors.orange,
+                  size: 26,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 10),
           TextField(
             onChanged: onSearchChanged,

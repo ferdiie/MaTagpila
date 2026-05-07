@@ -62,9 +62,26 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Ma.Tagpila',
-                  style: AppTextStyles.displayMd.copyWith(color: Colors.white),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Ma.Tagpila',
+                        style: AppTextStyles.displayMd
+                            .copyWith(color: Colors.white),
+                      ),
+                    ),
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 62,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.storefront_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(

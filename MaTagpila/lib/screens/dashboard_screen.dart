@@ -1,9 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/models/app_user.dart';
+import '../features/shared/models/price_item_model.dart';
+import '../features/shared/services/firestore_services.dart';
 import 'pos_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -11,6 +14,17 @@ class HomeScreen extends ConsumerStatefulWidget {
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class DashboardScreen extends StatelessWidget {
+  final VoidCallback onOpenPriceChecker;
+
+  const DashboardScreen({super.key, required this.onOpenPriceChecker});
+
+  @override
+  Widget build(BuildContext context) {
+    return _DashboardBody(onOpenPriceChecker: onOpenPriceChecker);
+  }
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
@@ -163,14 +177,31 @@ class _TabData {
 //  Dashboard body
 // ═══════════════════════════════════════════════════════════════════════════
 
-class _DashboardBody extends StatelessWidget {
+class _DashboardBody extends ConsumerStatefulWidget {
   final VoidCallback onOpenPriceChecker;
 
   const _DashboardBody({required this.onOpenPriceChecker});
 
   @override
+  ConsumerState<_DashboardBody> createState() => _DashboardBodyState();
+}
+
+class _DashboardBodyState extends ConsumerState<_DashboardBody> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final pricesAsync = ref.watch(allPricesStreamProvider);
+    final currency = NumberFormat.currency(symbol: 'PHP ', decimalDigits: 2);
+    final dateFmt = DateFormat('MMM d, y');
 
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -187,7 +218,7 @@ class _DashboardBody extends StatelessWidget {
         SliverToBoxAdapter(
           child: Container(
             margin: const EdgeInsets.all(20),
-            height: 140,
+            height: 142,
             decoration: BoxDecoration(
               color: AppColors.orange,
               borderRadius: BorderRadius.circular(28),
@@ -195,29 +226,33 @@ class _DashboardBody extends StatelessWidget {
             child: Stack(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.fromLTRB(24, 20, 172, 18),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
                         'Welcome back!',
-                        style: TextStyle(color: AppColors.white, fontSize: 16),
+                        style: TextStyle(color: Colors.black87, fontSize: 16),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         user?.email?.split('@').first.toUpperCase() ??
                             'YOUR STORE',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: AppColors.white,
-                          fontSize: 18,
+                          color: Colors.black87,
+                          fontSize: 22,
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
                         'Your store is looking good.',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color:
-                              AppColors.white.withAlpha((0.92 * 255).toInt()),
+                          color: Colors.black.withAlpha((0.75 * 255).toInt()),
                           fontSize: 12,
                         ),
                       ),
@@ -228,6 +263,7 @@ class _DashboardBody extends StatelessWidget {
                   right: 10,
                   bottom: 0,
                   top: 10,
+                  width: 160,
                   child: Image.asset(
                     'assets/images/logo.png',
                     fit: BoxFit.contain,
@@ -242,55 +278,401 @@ class _DashboardBody extends StatelessWidget {
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: Material(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(30),
-              elevation: 0,
-              child: InkWell(
-                onTap: onOpenPriceChecker,
-                borderRadius: BorderRadius.circular(30),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        pricesAsync.when(
+          data: (items) {
+            final queryLower = _query.trim().toLowerCase();
+            final filtered = queryLower.isEmpty
+                ? items
+                : items
+                    .where((item) =>
+                        item.nameLower.contains(queryLower) ||
+                        item.store.toLowerCase().contains(queryLower) ||
+                        item.category.toLowerCase().contains(queryLower))
+                    .toList();
+            final sortedByRecent = [...filtered]
+              ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+            final recentItems = sortedByRecent.take(8).toList();
+
+            final categoryCount = <String, int>{};
+            for (final item in filtered) {
+              categoryCount[item.category] = (categoryCount[item.category] ?? 0) + 1;
+            }
+            final sortedCategories = categoryCount.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+            final categoryNames =
+                sortedCategories.map((entry) => entry.key).take(6).toList();
+
+            final topItemName = () {
+              if (filtered.isEmpty) return '-';
+              final nameCounts = <String, int>{};
+              for (final item in filtered) {
+                nameCounts[item.name] = (nameCounts[item.name] ?? 0) + 1;
+              }
+              final sortedNames = nameCounts.entries.toList()
+                ..sort((a, b) => b.value.compareTo(a.value));
+              return sortedNames.first.key;
+            }();
+
+            final totalValue =
+                filtered.fold<double>(0, (sum, item) => sum + item.price);
+
+            final featuredItems = <PriceItem>[];
+            for (final category in categoryNames.take(3)) {
+              final match = sortedByRecent.firstWhere(
+                (item) => item.category == category,
+                orElse: () => sortedByRecent.first,
+              );
+              featuredItems.add(match);
+            }
+            if (featuredItems.isEmpty) {
+              featuredItems.addAll(sortedByRecent.take(3));
+            }
+
+            return SliverList(
+              delegate: SliverChildListDelegate([
+                const SizedBox(height: 2),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Icon(
-                        Icons.search_rounded,
-                        color: AppColors.orangeLight
-                            .withAlpha((0.85 * 255).toInt()),
+                      Expanded(
+                        child: _DashboardStatCard(
+                          value: '${filtered.length}',
+                          label: 'No. of Items',
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Text(
-                          'Search item to verify price.',
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 14,
-                          ),
+                        child: _DashboardStatCard(
+                          value: topItemName,
+                          label: 'Most Searched',
                         ),
                       ),
-                      Icon(Icons.chevron_right_rounded,
-                          color: Colors.grey.shade400),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _DashboardStatCard(
+                          value: currency.format(totalValue),
+                          label: 'Total Sales',
+                        ),
+                      ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _query = value),
+                    onSubmitted: (_) => widget.onOpenPriceChecker(),
+                    decoration: InputDecoration(
+                      hintText: 'Search item to verify price.',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() => _query = '');
+                              },
+                              icon: const Icon(Icons.clear_rounded),
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: Row(
+                    children: [
+                      Text(
+                        _query.isEmpty
+                            ? 'Recent Price Changes'
+                            : 'Search Results (${filtered.length})',
+                        style: AppTextStyles.headingLg,
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: widget.onOpenPriceChecker,
+                        child: const Text('See more'),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: 132,
+                  child: recentItems.isEmpty
+                      ? Center(
+                          child: Text(
+                            _query.isEmpty
+                                ? 'No recent price entries yet.'
+                                : 'No matching items.',
+                            style: AppTextStyles.bodyMd,
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: recentItems.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 10),
+                          itemBuilder: (_, index) => _RecentPriceCard(
+                            item: recentItems[index],
+                            currency: currency,
+                            dateFmt: dateFmt,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 18),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Text('Categories', style: AppTextStyles.headingLg),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: categoryNames.isEmpty
+                        ? [
+                            Text(
+                              'No categories yet.',
+                              style: AppTextStyles.bodyMd,
+                            ),
+                          ]
+                        : [
+                            for (var i = 0; i < categoryNames.length; i++)
+                              _CategoryChip(
+                                label: categoryNames[i],
+                                color: _categoryColor(i),
+                              ),
+                          ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 140,
+                  child: featuredItems.isEmpty
+                      ? const SizedBox.shrink()
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: featuredItems.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 12),
+                          itemBuilder: (_, index) => _FeaturedItemCard(
+                            item: featuredItems[index],
+                            currency: currency,
+                            accent: _categoryColor(index),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 22),
+              ]),
+            );
+          },
+          loading: () => const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (error, _) => SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Failed to load dashboard data: $error',
+                  style: AppTextStyles.bodyMd,
+                  textAlign: TextAlign.center,
                 ),
               ),
             ),
           ),
         ),
-        const SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Text(
-              'POS and inventory widgets can be customized from mockups next.',
+      ],
+    );
+  }
+}
+
+Color _categoryColor(int index) {
+  const colors = [
+    AppColors.catOrange,
+    AppColors.catGreen,
+    AppColors.catBlue,
+    AppColors.catRed,
+    AppColors.catBrown,
+    AppColors.catPurple,
+  ];
+  return colors[index % colors.length];
+}
+
+class _DashboardStatCard extends StatelessWidget {
+  final String value;
+  final String label;
+
+  const _DashboardStatCard({required this.value, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 116,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.orangeSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Center(
+              child: Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTextStyles.headingMd.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: AppTextStyles.labelSm.copyWith(color: AppColors.textPrimary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentPriceCard extends StatelessWidget {
+  final PriceItem item;
+  final NumberFormat currency;
+  final DateFormat dateFmt;
+
+  const _RecentPriceCard({
+    required this.item,
+    required this.currency,
+    required this.dateFmt,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 168,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.orangeSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.headingMd,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.store,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySm,
+          ),
+          const Spacer(),
+          Text(
+            currency.format(item.price),
+            style: AppTextStyles.headingMd.copyWith(color: AppColors.orangeDark),
+          ),
+          Text('Updated ${dateFmt.format(item.updatedAt)}',
+              style: AppTextStyles.bodySm),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  final String label;
+  final Color color;
+
+  const _CategoryChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: AppTextStyles.labelSm.copyWith(color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _FeaturedItemCard extends StatelessWidget {
+  final PriceItem item;
+  final NumberFormat currency;
+  final Color accent;
+
+  const _FeaturedItemCard({
+    required this.item,
+    required this.currency,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 148,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: AppColors.orangeSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 10,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            item.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.headingLg,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            currency.format(item.price),
+            style: AppTextStyles.priceLg,
+          ),
+          Text(
+            item.category,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.bodySm,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -306,8 +688,48 @@ class _SimpleTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text('$title module in progress', style: AppTextStyles.headingMd),
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              color: AppColors.orange,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTextStyles.headingLg.copyWith(
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 68,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.storefront_rounded,
+                    color: AppColors.white,
+                    size: 42,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Text('$title module in progress',
+                style: AppTextStyles.headingMd),
+          ),
+        ),
+      ],
     );
   }
 }

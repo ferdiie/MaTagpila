@@ -105,7 +105,23 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text('Add Price Info', style: AppTextStyles.displayMd),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Add Price Info', style: AppTextStyles.displayMd),
+                ),
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 62,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.storefront_rounded,
+                    color: AppColors.orange,
+                    size: 34,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 4),
             Text('Help your community find the best prices.',
                 style: AppTextStyles.bodyMd),

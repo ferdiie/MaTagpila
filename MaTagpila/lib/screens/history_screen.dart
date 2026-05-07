@@ -25,7 +25,24 @@ class HistoryScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('My Submissions', style: AppTextStyles.displayMd),
+                Row(
+                  children: [
+                    Expanded(
+                      child:
+                          Text('My Submissions', style: AppTextStyles.displayMd),
+                    ),
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 62,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.storefront_rounded,
+                        color: AppColors.orange,
+                        size: 34,
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text('Price entries you\'ve contributed.',
                     style: AppTextStyles.bodyMd),

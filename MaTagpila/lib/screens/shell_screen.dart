@@ -4,8 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
 import 'add_item_screen.dart';
+import 'dashboard_screen.dart';
 import 'price_check_screen.dart';
-import 'history_screen.dart';
 import 'profile_screen.dart';
 import 'pos_screen.dart';
 
@@ -26,7 +26,17 @@ class _NavItem {
 
 const _navItems = [
   _NavItem(
-    label: 'Price Check',
+    label: 'Home',
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+  ),
+  _NavItem(
+    label: 'POS',
+    icon: Icons.point_of_sale_outlined,
+    activeIcon: Icons.point_of_sale_rounded,
+  ),
+  _NavItem(
+    label: 'Price Checker',
     icon: Icons.search_rounded,
     activeIcon: Icons.search_rounded,
   ),
@@ -34,16 +44,6 @@ const _navItems = [
     label: 'Add Item',
     icon: Icons.add_circle_outline_rounded,
     activeIcon: Icons.add_circle_rounded,
-  ),
-  _NavItem(
-    label: 'Sales',
-    icon: Icons.point_of_sale_outlined,
-    activeIcon: Icons.point_of_sale_rounded,
-  ),
-  _NavItem(
-    label: 'History',
-    icon: Icons.history_rounded,
-    activeIcon: Icons.history_rounded,
   ),
   _NavItem(
     label: 'Profile',
@@ -63,22 +63,23 @@ final _tabProvider = StateProvider<int>((_) => 0);
 class ShellScreen extends ConsumerWidget {
   const ShellScreen({super.key});
 
-  static const _screens = [
-    PriceCheckScreen(),
-    AddItemScreen(),
-    PosScreen(),
-    HistoryScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tab = ref.watch(_tabProvider);
     final isWide = MediaQuery.of(context).size.width >= 720;
+    final screens = [
+      DashboardScreen(
+        onOpenPriceChecker: () => ref.read(_tabProvider.notifier).state = 2,
+      ),
+      const PosScreen(),
+      const PriceCheckScreen(),
+      const AddItemScreen(),
+      const ProfileScreen(),
+    ];
 
     return isWide
-        ? _WebLayout(tab: tab, ref: ref)
-        : _MobileLayout(tab: tab, ref: ref);
+        ? _WebLayout(tab: tab, ref: ref, screens: screens)
+        : _MobileLayout(tab: tab, ref: ref, screens: screens);
   }
 }
 
@@ -88,8 +89,13 @@ class ShellScreen extends ConsumerWidget {
 class _WebLayout extends StatelessWidget {
   final int tab;
   final WidgetRef ref;
+  final List<Widget> screens;
 
-  const _WebLayout({required this.tab, required this.ref});
+  const _WebLayout({
+    required this.tab,
+    required this.ref,
+    required this.screens,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +107,7 @@ class _WebLayout extends StatelessWidget {
           Expanded(
             child: IndexedStack(
               index: tab,
-              children: ShellScreen._screens,
+              children: screens,
             ),
           ),
         ],
@@ -136,15 +142,21 @@ class _TopNavBar extends StatelessWidget {
               // Logo / Brand
               Row(
                 children: [
-                  Container(
+                  Image.asset(
+                    'assets/images/logo.png',
                     width: 32,
                     height: 32,
-                    decoration: BoxDecoration(
-                      color: AppColors.orange,
-                      borderRadius: BorderRadius.circular(8),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.orange,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.storefront_rounded,
+                          color: Colors.white, size: 18),
                     ),
-                    child: const Icon(Icons.search_rounded,
-                        color: Colors.white, size: 18),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -231,8 +243,13 @@ class _WebNavLink extends StatelessWidget {
 class _MobileLayout extends StatelessWidget {
   final int tab;
   final WidgetRef ref;
+  final List<Widget> screens;
 
-  const _MobileLayout({required this.tab, required this.ref});
+  const _MobileLayout({
+    required this.tab,
+    required this.ref,
+    required this.screens,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -242,7 +259,7 @@ class _MobileLayout extends StatelessWidget {
         bottom: false,
         child: IndexedStack(
           index: tab,
-          children: ShellScreen._screens,
+          children: screens,
         ),
       ),
       bottomNavigationBar: _BottomNav(
@@ -262,6 +279,7 @@ class _BottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 86,
       decoration: BoxDecoration(
         color: AppColors.white,
         boxShadow: [
@@ -274,18 +292,25 @@ class _BottomNav extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 72,
-          child: Row(
-            children: List.generate(
-              _navItems.length,
-              (i) => _BottomNavItem(
+        child: Row(
+          children: List.generate(_navItems.length, (i) {
+            if (i == 2) {
+              return Expanded(
+                child: _CenterBottomNavItem(
+                  item: _navItems[i],
+                  isActive: currentTab == i,
+                  onTap: () => onTap(i),
+                ),
+              );
+            }
+            return Expanded(
+              child: _BottomNavItem(
                 item: _navItems[i],
                 isActive: currentTab == i,
                 onTap: () => onTap(i),
               ),
-            ),
-          ),
+            );
+          }),
         ),
       ),
     );
@@ -305,38 +330,95 @@ class _BottomNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isActive ? item.activeIcon : item.icon,
-                size: 20,
-                color: isActive ? AppColors.orange : AppColors.textMuted,
-              ),
-              const SizedBox(height: 2),
-              Flexible(
-                child: Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 9,
-                    height: 1.1,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                    color: isActive ? AppColors.orange : AppColors.textMuted,
-                  ),
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isActive ? item.activeIcon : item.icon,
+              size: 20,
+              color: isActive ? AppColors.orange : AppColors.textMuted,
+            ),
+            const SizedBox(height: 2),
+            Flexible(
+              child: Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 9,
+                  height: 1.1,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  color: isActive ? AppColors.orange : AppColors.textMuted,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _CenterBottomNavItem extends StatelessWidget {
+  final _NavItem item;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _CenterBottomNavItem({
+    required this.item,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Transform.translate(
+            offset: const Offset(0, -8),
+            child: Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.orange,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.orange.withAlpha(70),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.search_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9,
+              height: 1.1,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              color: isActive ? AppColors.orange : AppColors.textMuted,
+            ),
+          ),
+        ],
       ),
     );
   }

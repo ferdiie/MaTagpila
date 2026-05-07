@@ -20,6 +20,28 @@ class ProfileScreen extends ConsumerWidget {
       child: Column(
         children: [
           const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Profile',
+                  style: AppTextStyles.displayMd,
+                  textAlign: TextAlign.left,
+                ),
+              ),
+              Image.asset(
+                'assets/images/logo.png',
+                height: 62,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.storefront_rounded,
+                  color: AppColors.orange,
+                  size: 34,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           // Avatar
           Container(
             width: 88,
