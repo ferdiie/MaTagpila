@@ -2,6 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/services/firestore_services.dart';
@@ -16,22 +17,21 @@ class ProfileScreen extends ConsumerWidget {
     final displayName = email.split('@').first;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          const SizedBox(height: 16),
+          // Header Section
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: Text(
-                  'Profile',
-                  style: AppTextStyles.displayMd,
-                  textAlign: TextAlign.left,
-                ),
+              Text(
+                'Profile',
+                style: AppTextStyles.displayMd,
               ),
               Image.asset(
                 'assets/images/logo.png',
-                height: 62,
+                height: 50,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) => const Icon(
                   Icons.storefront_rounded,
@@ -41,109 +41,171 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          // Avatar
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.orangeSurface,
-              border: Border.all(color: AppColors.orange, width: 2),
-            ),
-            child: Center(
-              child: Text(
-                displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-                style:
-                    AppTextStyles.displayMd.copyWith(color: AppColors.orange),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(displayName.toUpperCase(), style: AppTextStyles.headingLg),
-          const SizedBox(height: 4),
-          Text(email, style: AppTextStyles.bodyMd),
           const SizedBox(height: 32),
 
-          // Info cards
-          _InfoCard(
-            icon: Icons.email_outlined,
-            label: 'Email',
-            value: email,
-          ),
-          const SizedBox(height: 12),
-          const _InfoCard(
-            icon: Icons.storefront_rounded,
-            label: 'Contributor',
-            value: 'Ma.Tagpila Community',
-          ),
-          const SizedBox(height: 32),
+          // User Avatar & Identity
+          _buildUserHeader(displayName, email),
 
-          // Sign out button
+          const SizedBox(height: 40),
+
+          // Action Menu Groups
+          _buildSectionLabel('Account Overview'),
+          _ProfileMenuTile(
+            icon: Icons.receipt_long_rounded,
+            label: 'My Transactions',
+            onTap: () => context.pushNamed('transactions'),
+          ),
+          _ProfileMenuTile(
+            icon: Icons.email_rounded,
+            label: 'Contact Email',
+            trailing: Text(
+              email,
+              style: AppTextStyles.bodySm.copyWith(color: Colors.grey),
+            ),
+            onTap: null, // Keep it static or allow edit
+          ),
+
+          const SizedBox(height: 24),
+
+          _buildSectionLabel('Support & Settings'),
+          _ProfileMenuTile(
+            icon: Icons.help_outline_rounded,
+            label: 'Help & Support',
+            onTap: () {},
+          ),
+          _ProfileMenuTile(
+            icon: Icons.info_outline_rounded,
+            label: 'About Ma.Tagpila',
+            onTap: () {},
+          ),
+
+          const SizedBox(height: 48),
+
+          // Logout Button
           SizedBox(
             width: double.infinity,
-            height: 52,
+            height: 54,
             child: OutlinedButton.icon(
               onPressed: () async {
                 await ref.read(authServiceProvider).signOut();
               },
               icon: const Icon(Icons.logout_rounded, color: AppColors.error),
-              label: const Text('Sign Out',
-                  style: TextStyle(color: AppColors.error)),
+              label: const Text('Sign Out'),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.error),
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error, width: 1.2),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUserHeader(String name, String email) {
+    return Column(
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.orangeSurface,
+            border: Border.all(color: AppColors.orange, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.orange.withValues(alpha: 0.4),
+                blurRadius: 15,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : 'U',
+              style: AppTextStyles.displayMd.copyWith(
+                color: AppColors.orange,
+                fontSize: 36,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(name.toUpperCase(), style: AppTextStyles.headingLg),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            'Community Contributor',
+            style: AppTextStyles.bodySm.copyWith(color: Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text.toUpperCase(),
+          style: AppTextStyles.bodySm.copyWith(
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[500],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _InfoCard extends StatelessWidget {
+class _ProfileMenuTile extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String value;
+  final Widget? trailing;
+  final VoidCallback? onTap;
 
-  const _InfoCard({
+  const _ProfileMenuTile({
     required this.icon,
     required this.label,
-    required this.value,
+    this.trailing,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Icon(icon, color: AppColors.orange, size: 22),
-          const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: AppTextStyles.bodySm),
-              const SizedBox(height: 2),
-              Text(value, style: AppTextStyles.headingSm),
-            ],
-          ),
-        ],
+      child: ListTile(
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        leading: Icon(icon, color: AppColors.orange, size: 24),
+        title: Text(label, style: AppTextStyles.headingSm),
+        trailing: trailing ??
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }

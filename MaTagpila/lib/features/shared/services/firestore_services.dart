@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../models/price_item_model.dart';
+import '../../transactions/models/transaction_model.dart';
 
 part 'firestore_services.g.dart';
 
@@ -162,4 +163,40 @@ Stream<List<PriceItem>> myPricesStream(Ref ref) {
   final uid = ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
   if (uid.isEmpty) return const Stream.empty();
   return ref.watch(pricesServiceProvider).watchMine(uid);
+}
+
+class TransactionsService {
+  final FirebaseFirestore _firestore;
+  TransactionsService(this._firestore);
+
+  CollectionReference get _col => _firestore.collection('transactions');
+
+  // Watch transactions for a specific user
+  Stream<List<TransactionModel>> watchUserTransactions(String userId) {
+    return _col
+        .where('sellerId', isEqualTo: userId)
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map(TransactionModel.fromSnapshot).toList());
+  }
+}
+
+// Provider for the service
+@riverpod
+TransactionsService transactionsService(Ref ref) {
+  return TransactionsService(ref.watch(firebaseFirestoreProvider));
+}
+
+// Stream provider for the UI
+@riverpod
+Stream<List<TransactionModel>> userTransactionsStream(Ref ref) {
+  // 1. Get the current user from your existing auth state provider
+  final user = ref.watch(authStateChangesProvider).value;
+
+  // 2. Return an empty stream if no user is logged in
+  if (user == null) return const Stream.empty();
+
+  // 3. IMPORTANT: Use the generated name 'transactionsServiceProvider'
+  // and watch it to get the service instance.
+  return ref.watch(transactionsServiceProvider).watchUserTransactions(user.uid);
 }

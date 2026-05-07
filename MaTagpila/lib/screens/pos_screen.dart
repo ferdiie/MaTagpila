@@ -53,7 +53,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
   Widget build(BuildContext context) {
     final pricesAsync = ref.watch(allPricesStreamProvider);
     final query = ref.watch(_posSearchProvider).trim().toLowerCase();
-    final currency = NumberFormat.currency(symbol: 'PHP ');
+    final currency = NumberFormat.currency(symbol: '₱ ');
 
     return pricesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),

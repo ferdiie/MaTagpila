@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../screens/login_screen.dart';
 import '../../screens/shell_screen.dart';
 import 'auth_provider.dart';
+import '../../screens/transaction_screen.dart'; //
 
 class _AuthRefresh extends ChangeNotifier {
   _AuthRefresh(FirebaseAuth auth) {
@@ -53,6 +54,15 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/',
         name: 'home',
         builder: (context, state) => const ShellScreen(),
+        routes: [
+          // ADD THIS SUB-ROUTE
+          GoRoute(
+            path: 'transactions',
+            name:
+                'transactions', // This MUST match context.pushNamed('transactions')
+            builder: (context, state) => const TransactionScreen(),
+          ),
+        ],
       ),
     ],
   );

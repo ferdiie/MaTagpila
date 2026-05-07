@@ -126,5 +126,44 @@ final myPricesStreamProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef MyPricesStreamRef = AutoDisposeStreamProviderRef<List<PriceItem>>;
+String _$transactionsServiceHash() =>
+    r'a307927d555da4c5658c5657454db4d037893397';
+
+/// See also [transactionsService].
+@ProviderFor(transactionsService)
+final transactionsServiceProvider =
+    AutoDisposeProvider<TransactionsService>.internal(
+  transactionsService,
+  name: r'transactionsServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$transactionsServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef TransactionsServiceRef = AutoDisposeProviderRef<TransactionsService>;
+String _$userTransactionsStreamHash() =>
+    r'5df3742929ba6fb2a455171ff8412c95b4f3bcf2';
+
+/// See also [userTransactionsStream].
+@ProviderFor(userTransactionsStream)
+final userTransactionsStreamProvider =
+    AutoDisposeStreamProvider<List<TransactionModel>>.internal(
+  userTransactionsStream,
+  name: r'userTransactionsStreamProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$userTransactionsStreamHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef UserTransactionsStreamRef
+    = AutoDisposeStreamProviderRef<List<TransactionModel>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
