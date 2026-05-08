@@ -6,9 +6,14 @@ import 'package:go_router/go_router.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/services/firestore_services.dart';
+import 'about_screen.dart';
+import 'help_support_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
+
+  // ─── App version ───────────────────────────────────────────────────────────
+  static const String _appVersion = '1.0.0';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -48,7 +53,7 @@ class ProfileScreen extends ConsumerWidget {
 
           const SizedBox(height: 40),
 
-          // Action Menu Groups
+          // Account Overview
           _buildSectionLabel('Account Overview'),
           _ProfileMenuTile(
             icon: Icons.receipt_long_rounded,
@@ -62,26 +67,35 @@ class ProfileScreen extends ConsumerWidget {
               email,
               style: AppTextStyles.bodySm.copyWith(color: Colors.grey),
             ),
-            onTap: null, // Keep it static or allow edit
+            onTap: null,
           ),
 
           const SizedBox(height: 24),
 
+          // Support & Settings
           _buildSectionLabel('Support & Settings'),
           _ProfileMenuTile(
             icon: Icons.help_outline_rounded,
             label: 'Help & Support',
-            onTap: () {},
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const HelpSupportScreen(),
+              ),
+            ),
           ),
           _ProfileMenuTile(
             icon: Icons.info_outline_rounded,
             label: 'About Ma.Tagpila',
-            onTap: () {},
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AboutScreen(),
+              ),
+            ),
           ),
 
           const SizedBox(height: 48),
 
-          // Logout Button
+          // Sign-Out Button
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -98,6 +112,22 @@ class ProfileScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // App version footer
+          Text(
+            'Ma.Tagpila v$_appVersion',
+            style: AppTextStyles.bodySm.copyWith(color: Colors.grey[400]),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Price Checker for Community Stores',
+            style: AppTextStyles.bodySm.copyWith(
+              color: Colors.grey[400],
+              fontSize: 11,
             ),
           ),
           const SizedBox(height: 24),

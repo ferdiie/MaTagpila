@@ -146,7 +146,7 @@ final transactionsServiceProvider =
 // ignore: unused_element
 typedef TransactionsServiceRef = AutoDisposeProviderRef<TransactionsService>;
 String _$userTransactionsStreamHash() =>
-    r'5df3742929ba6fb2a455171ff8412c95b4f3bcf2';
+    r'09b06faac8eaac6862e306c324b885ea2671a22c';
 
 /// See also [userTransactionsStream].
 @ProviderFor(userTransactionsStream)

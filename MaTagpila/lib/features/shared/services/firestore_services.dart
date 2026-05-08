@@ -63,7 +63,7 @@ AuthService authService(Ref ref) {
 }
 
 // ─────────────────────────────────────────────
-//  PRICES SERVICE  (main collection)
+//  PRICES SERVICE
 // ─────────────────────────────────────────────
 class PricesService {
   final FirebaseFirestore _firestore;
@@ -73,7 +73,6 @@ class PricesService {
   CollectionReference<Map<String, dynamic>> get _col =>
       _firestore.collection('prices');
 
-  // Watch all items
   Stream<List<PriceItem>> watchAll() {
     return _col
         .orderBy('updatedAt', descending: true)
@@ -81,7 +80,6 @@ class PricesService {
         .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
   }
 
-  // Watch items added by current user only
   Stream<List<PriceItem>> watchMine(String userId) {
     return _col
         .where('addedBy', isEqualTo: userId)
@@ -90,7 +88,6 @@ class PricesService {
         .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
   }
 
-  // Search by name (client-side fuzzy after fetching)
   Future<List<PriceItem>> searchByName(String query) async {
     if (query.trim().isEmpty) return [];
     final q = query.trim().toLowerCase();
@@ -102,7 +99,6 @@ class PricesService {
     return snap.docs.map(PriceItem.fromSnapshot).toList();
   }
 
-  // Add new item
   Future<void> addItem({
     required String name,
     required double price,
@@ -129,7 +125,6 @@ class PricesService {
     });
   }
 
-  // Update item price
   Future<void> updatePrice({
     required String docId,
     required double newPrice,
@@ -142,7 +137,6 @@ class PricesService {
     });
   }
 
-  // Delete item
   Future<void> deleteItem(String docId) async {
     await _col.doc(docId).delete();
   }
@@ -165,13 +159,15 @@ Stream<List<PriceItem>> myPricesStream(Ref ref) {
   return ref.watch(pricesServiceProvider).watchMine(uid);
 }
 
+// ─────────────────────────────────────────────
+//  TRANSACTIONS SERVICE
+// ─────────────────────────────────────────────
 class TransactionsService {
   final FirebaseFirestore _firestore;
   TransactionsService(this._firestore);
 
   CollectionReference get _col => _firestore.collection('transactions');
 
-  // Watch transactions for a specific user
   Stream<List<TransactionModel>> watchUserTransactions(String userId) {
     return _col
         .where('sellerId', isEqualTo: userId)
@@ -179,24 +175,35 @@ class TransactionsService {
         .snapshots()
         .map((s) => s.docs.map(TransactionModel.fromSnapshot).toList());
   }
+
+  Future<void> saveTransaction({
+    required String sellerId,
+    required List<Map<String, dynamic>> items,
+    required double total,
+    required double tendered,
+    required double change,
+  }) async {
+    await _col.add({
+      'sellerId': sellerId,
+      'items': items,
+      'total': total,
+      'tendered': tendered,
+      'change': change,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
 }
 
-// Provider for the service
+// ── THESE TWO WERE MISSING — root cause of the error ──────────────────────────
+
 @riverpod
 TransactionsService transactionsService(Ref ref) {
   return TransactionsService(ref.watch(firebaseFirestoreProvider));
 }
 
-// Stream provider for the UI
 @riverpod
 Stream<List<TransactionModel>> userTransactionsStream(Ref ref) {
-  // 1. Get the current user from your existing auth state provider
   final user = ref.watch(authStateChangesProvider).value;
-
-  // 2. Return an empty stream if no user is logged in
   if (user == null) return const Stream.empty();
-
-  // 3. IMPORTANT: Use the generated name 'transactionsServiceProvider'
-  // and watch it to get the service instance.
   return ref.watch(transactionsServiceProvider).watchUserTransactions(user.uid);
 }

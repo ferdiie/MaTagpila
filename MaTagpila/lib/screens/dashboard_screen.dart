@@ -6,9 +6,10 @@ import 'package:intl/intl.dart';
 import '../core/theme/app_theme.dart';
 import '../features/dashboard/presentation/providers/dashboard_catalog_providers.dart';
 import '../features/dashboard/presentation/widgets/dashboard_category_filter_bar.dart';
-import '../features/dashboard/presentation/widgets/dashboard_product_card.dart';
 import '../features/shared/models/app_user.dart';
 import '../features/shared/models/price_item_model.dart';
+import '../features/shared/services/firestore_services.dart';
+import '../features/transactions/models/transaction_model.dart';
 import 'pos_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -143,7 +144,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ];
     }
 
-    // Cashier / fallback
     return [
       const _TabData(
         label: 'POS',
@@ -198,9 +198,17 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     super.dispose();
   }
 
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final displayName = user?.email?.split('@').first ?? 'Your Store';
     final categoriesAsync = ref.watch(dashboardCategoriesProvider);
     final filteredProductsAsync =
         ref.watch(dashboardFilteredProductsProvider(_query));
@@ -208,83 +216,21 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     final selectedCategory = ref.watch(selectedDashboardCategoryProvider);
     final categoryColorMap = ref.watch(dashboardCategoryColorMapProvider);
     final currency = NumberFormat.currency(symbol: 'PHP ', decimalDigits: 2);
-    final dateFmt = DateFormat('MMM d, y');
+    final dateFmt = DateFormat('MMM d');
+    final fullDateFmt = DateFormat('MMM d, y');
 
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
+        // ── Welcome Banner (full redesign) ───────────────────────────────
         SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-            child: Text(
-              'MA.TAGPILA',
-              style: AppTextStyles.displayMd.copyWith(color: AppColors.orange),
-            ),
+          child: _WelcomeBanner(
+            greeting: _greeting(),
+            displayName: displayName,
           ),
         ),
-        SliverToBoxAdapter(
-          child: Container(
-            margin: const EdgeInsets.all(20),
-            height: 142,
-            decoration: BoxDecoration(
-              color: AppColors.orange,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 172, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Welcome back!',
-                        style: TextStyle(color: Colors.black87, fontSize: 16),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user?.email?.split('@').first.toUpperCase() ??
-                            'YOUR STORE',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.black87,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Your store is looking good.',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.black.withAlpha((0.75 * 255).toInt()),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  right: 10,
-                  bottom: 0,
-                  top: 10,
-                  width: 160,
-                  child: Image.asset(
-                    'assets/images/logo.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(
-                      Icons.storefront_rounded,
-                      color: AppColors.white,
-                      size: 72,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+
+        // ── Main content ─────────────────────────────────────────────────
         filteredProductsAsync.when(
           data: (filteredProducts) {
             final recentItems =
@@ -313,64 +259,120 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               return sortedNames.first.key;
             }();
 
-            final totalValue =
-                allProducts.fold<double>(0, (sum, item) => sum + item.price);
+            // ── Today's total sales from transactions ──────────────────
+            final transactionsAsync = ref.watch(userTransactionsStreamProvider);
+            final transactions =
+                transactionsAsync.valueOrNull ?? <TransactionModel>[];
+            final now = DateTime.now();
+            final todaySales = transactions.where((tx) {
+              return tx.timestamp.year == now.year &&
+                  tx.timestamp.month == now.month &&
+                  tx.timestamp.day == now.day;
+            }).fold(0.0, (sum, tx) => sum + tx.totalAmount);
 
             return SliverList(
               delegate: SliverChildListDelegate([
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
+
+                // ── Stat cards ──────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
                       Expanded(
-                        child: _DashboardStatCard(
+                        child: _StatCard(
+                          icon: Icons.inventory_2_outlined,
                           value: '${allProducts.length}',
-                          label: 'No. of Items',
+                          label: 'Items',
+                          sublabel: 'in catalog',
+                          color: AppColors.catBlue,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: _DashboardStatCard(
-                          value: topItemName,
-                          label: 'Most Searched',
+                        child: GestureDetector(
+                          onTap: () {
+                            final q = topItemName == '-' ? '' : topItemName;
+                            _searchController.text = q;
+                            setState(() => _query = q);
+                          },
+                          child: _StatCard(
+                            icon: Icons.trending_up_rounded,
+                            value: topItemName,
+                            label: 'Top Item',
+                            sublabel: 'tap to search',
+                            color: AppColors.catGreen,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       Expanded(
-                        child: _DashboardStatCard(
-                          value: currency.format(totalValue),
+                        child: _StatCard(
+                          icon: Icons.payments_outlined,
+                          value: NumberFormat.compactCurrency(
+                            symbol: '₱',
+                            decimalDigits: 0,
+                          ).format(todaySales),
                           label: 'Total Sales',
+                          sublabel: 'today',
+                          color: AppColors.catOrange,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+
+                // ── Search bar ──────────────────────────────────────────
+                const SizedBox(height: 16),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) => setState(() => _query = value),
-                    onSubmitted: (_) => widget.onOpenPriceChecker(),
-                    decoration: InputDecoration(
-                      hintText: 'Search item to verify price.',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: _query.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _query = '');
-                              },
-                              icon: const Icon(Icons.clear_rounded),
-                            ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 12,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (value) => setState(() => _query = value),
+                      onSubmitted: (_) => widget.onOpenPriceChecker(),
+                      decoration: InputDecoration(
+                        hintText: 'Search item to verify price…',
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            color: AppColors.orange),
+                        suffixIcon: _query.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  _searchController.clear();
+                                  setState(() => _query = '');
+                                },
+                                icon: const Icon(Icons.clear_rounded),
+                              ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                              color: AppColors.orange, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14, horizontal: 16),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
+
+                // ── Recent price changes ────────────────────────────────
+                const SizedBox(height: 22),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
                   child: Row(
                     children: [
                       Text(
@@ -380,16 +382,20 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         style: AppTextStyles.headingLg,
                       ),
                       const Spacer(),
-                      TextButton(
+                      TextButton.icon(
                         onPressed: widget.onOpenPriceChecker,
-                        child: const Text('See more'),
+                        icon: const Icon(Icons.arrow_forward_rounded, size: 16),
+                        label: const Text('See all'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.orange,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 SizedBox(
-                  height: 132,
+                  height: 140,
                   child: recentItems.isEmpty
                       ? Center(
                           child: Text(
@@ -406,13 +412,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           itemBuilder: (_, index) => _RecentPriceCard(
                             item: recentItems[index],
                             currency: currency,
-                            dateFmt: dateFmt,
+                            dateFmt: fullDateFmt,
                           ),
                         ),
                 ),
-                const SizedBox(height: 18),
+
+                // ── Browse by category ──────────────────────────────────
+                const SizedBox(height: 22),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
                   child: Text('Browse by Category',
                       style: AppTextStyles.headingLg),
                 ),
@@ -424,14 +432,37 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         category;
                   },
                 ),
-                const SizedBox(height: 18),
+
+                // ── All products ────────────────────────────────────────
+                const SizedBox(height: 20),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Text(
-                    selectedCategory == allCategoryFilter
-                        ? 'All Products (${filteredProducts.length})'
-                        : '$selectedCategory Products (${filteredProducts.length})',
-                    style: AppTextStyles.headingLg,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                  child: Row(
+                    children: [
+                      Text(
+                        selectedCategory == allCategoryFilter
+                            ? 'All Products'
+                            : '$selectedCategory Products',
+                        style: AppTextStyles.headingLg,
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.orange,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${filteredProducts.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -446,49 +477,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             height: 120,
                             child: Center(
                               child: Text(
-                                'No products found for this category.',
+                                'No products found.',
                                 style: AppTextStyles.bodyMd,
                               ),
                             ),
                           )
-                        : LayoutBuilder(
+                        : _ProductListView(
                             key: ValueKey(
-                              'grid-$selectedCategory-${filteredProducts.length}-$_query',
+                              'list-$selectedCategory-'
+                              '${filteredProducts.length}-$_query',
                             ),
-                            builder: (context, constraints) {
-                              final crossAxisCount =
-                                  constraints.maxWidth >= 560 ? 3 : 2;
-                              final cardWidth = (constraints.maxWidth -
-                                      ((crossAxisCount - 1) * 12)) /
-                                  crossAxisCount;
-                              final childAspectRatio = cardWidth / 122;
-
-                              return GridView.builder(
-                                itemCount: filteredProducts.length,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  crossAxisSpacing: 12,
-                                  mainAxisSpacing: 12,
-                                  childAspectRatio: childAspectRatio,
-                                ),
-                                itemBuilder: (_, index) => DashboardProductCard(
-                                  item: filteredProducts[index],
-                                  currency: currency,
-                                  accent: _categoryColor(
-                                    categoryColorMap[
-                                            filteredProducts[index].category] ??
-                                        0,
-                                  ),
-                                ),
-                              );
-                            },
+                            items: filteredProducts,
+                            currency: currency,
+                            dateFmt: dateFmt,
+                            categoryColorMap: categoryColorMap,
                           ),
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 28),
               ]),
             );
           },
@@ -515,6 +521,415 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Welcome Banner — full redesign
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _WelcomeBanner extends StatelessWidget {
+  final String greeting;
+  final String displayName;
+
+  const _WelcomeBanner({
+    required this.greeting,
+    required this.displayName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFE85D04), Color(0xFFFF8C42)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.orange.withValues(alpha: 0.35),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Decorative circle background blobs
+          Positioned(
+            right: -20,
+            top: -20,
+            child: Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 60,
+            bottom: -30,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
+          ),
+
+          // Content row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 16, 20),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Left: text
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // App brand
+                      Row(
+                        children: [
+                          Container(
+                            width: 4,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'MA.TAGPILA',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.85),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        greeting,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.80),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        displayName.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          '🟢  Store is open',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.95),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Right: big logo
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                      width: 1.5,
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.storefront_rounded,
+                      color: Colors.white.withValues(alpha: 0.9),
+                      size: 56,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Stat card — redesigned
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final String sublabel;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.sublabel,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          Text(
+            sublabel,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppColors.textGrey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  List layout for All Products
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _ProductListView extends StatelessWidget {
+  final List<PriceItem> items;
+  final NumberFormat currency;
+  final DateFormat dateFmt;
+  final Map<String, int> categoryColorMap;
+
+  const _ProductListView({
+    super.key,
+    required this.items,
+    required this.currency,
+    required this.dateFmt,
+    required this.categoryColorMap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ListView.separated(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const Divider(
+          height: 1,
+          thickness: 0.5,
+          indent: 16,
+          endIndent: 16,
+          color: AppColors.borderLight,
+        ),
+        itemBuilder: (_, index) => _ProductListTile(
+          item: items[index],
+          currency: currency,
+          dateFmt: dateFmt,
+          accentColor: _categoryColor(
+            categoryColorMap[items[index].category] ?? 0,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductListTile extends StatelessWidget {
+  final PriceItem item;
+  final NumberFormat currency;
+  final DateFormat dateFmt;
+  final Color accentColor;
+
+  const _ProductListTile({
+    required this.item,
+    required this.currency,
+    required this.dateFmt,
+    required this.accentColor,
+  });
+
+  Color _freshnessColor() {
+    final age = DateTime.now().difference(item.updatedAt);
+    if (age.inDays <= 1) return AppColors.catGreen;
+    if (age.inDays <= 7) return AppColors.catOrange;
+    return AppColors.catRed;
+  }
+
+  String _updatedLabel() {
+    final age = DateTime.now().difference(item.updatedAt);
+    if (age.inDays == 0) return 'Today';
+    if (age.inDays == 1) return 'Yesterday';
+    return dateFmt.format(item.updatedAt);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          // Freshness dot
+          Container(
+            width: 9,
+            height: 9,
+            margin: const EdgeInsets.only(right: 12, top: 2),
+            decoration: BoxDecoration(
+              color: _freshnessColor(),
+              shape: BoxShape.circle,
+            ),
+          ),
+          // Name + category pill
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.headingMd,
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    item.category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.labelSm.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Price + updated date
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                currency.format(item.price),
+                style: AppTextStyles.priceMd,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                _updatedLabel(),
+                style: AppTextStyles.bodySm.copyWith(color: AppColors.textGrey),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Category → accent color helper
+// ═══════════════════════════════════════════════════════════════════════════
+
 Color _categoryColor(int index) {
   const colors = [
     AppColors.catOrange,
@@ -527,50 +942,9 @@ Color _categoryColor(int index) {
   return colors[index % colors.length];
 }
 
-class _DashboardStatCard extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _DashboardStatCard({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 116,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.orangeSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderLight),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Center(
-              child: Text(
-                value,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.headingMd.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: AppTextStyles.labelSm.copyWith(color: AppColors.textPrimary),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// ═══════════════════════════════════════════════════════════════════════════
+//  Recent price card (horizontal scroll) — redesigned
+// ═══════════════════════════════════════════════════════════════════════════
 
 class _RecentPriceCard extends StatelessWidget {
   final PriceItem item;
@@ -586,37 +960,56 @@ class _RecentPriceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 168,
-      padding: const EdgeInsets.all(12),
+      width: 160,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.orangeSurface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderLight),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: AppColors.orangeSurface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.storefront_rounded,
+                color: AppColors.orange, size: 16),
+          ),
+          const SizedBox(height: 8),
           Text(
             item.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.headingMd,
+            style: AppTextStyles.headingSm,
           ),
           const SizedBox(height: 2),
           Text(
             item.store,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodySm,
+            style: AppTextStyles.bodySm.copyWith(color: AppColors.textGrey),
           ),
           const Spacer(),
           Text(
             currency.format(item.price),
             style:
-                AppTextStyles.headingMd.copyWith(color: AppColors.orangeDark),
+                AppTextStyles.headingSm.copyWith(color: AppColors.orangeDark),
           ),
-          Text('Updated ${dateFmt.format(item.updatedAt)}',
-              style: AppTextStyles.bodySm),
+          Text(
+            'Updated ${dateFmt.format(item.updatedAt)}',
+            style: AppTextStyles.bodySm
+                .copyWith(color: AppColors.textGrey, fontSize: 10),
+          ),
         ],
       ),
     );
@@ -638,11 +1031,22 @@ class _SimpleTab extends StatelessWidget {
       slivers: [
         SliverToBoxAdapter(
           child: Container(
-            margin: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
             decoration: BoxDecoration(
-              color: AppColors.orange,
-              borderRadius: BorderRadius.circular(22),
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE85D04), Color(0xFFFF8C42)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.orange.withValues(alpha: 0.35),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -650,18 +1054,28 @@ class _SimpleTab extends StatelessWidget {
                   child: Text(
                     title,
                     style: AppTextStyles.headingLg.copyWith(
-                      color: Colors.black87,
+                      color: Colors.white,
                     ),
                   ),
                 ),
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 68,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.storefront_rounded,
-                    color: AppColors.white,
-                    size: 42,
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.storefront_rounded,
+                      color: AppColors.white,
+                      size: 42,
+                    ),
                   ),
                 ),
               ],
