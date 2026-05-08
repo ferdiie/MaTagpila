@@ -192,7 +192,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   final _searchController = TextEditingController();
   String _query = '';
 
+  late Future<String> _mostSearchedFuture;
+
   @override
+  void initState() {
+    super.initState();
+    // We call the service and ensure it handles the result
+    _mostSearchedFuture = getMostSearchedItem();
+  }
+
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -290,19 +298,27 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            final q = topItemName == '-' ? '' : topItemName;
-                            _searchController.text = q;
-                            setState(() => _query = q);
+                        child: FutureBuilder<String>(
+                          future: _mostSearchedFuture,
+                          builder: (context, snapshot) {
+                            final mostSearched = snapshot.data ?? '-';
+
+                            return GestureDetector(
+                              onTap: () {
+                                final q =
+                                    mostSearched == '-' ? '' : mostSearched;
+                                _searchController.text = q;
+                                setState(() => _query = q);
+                              },
+                              child: _StatCard(
+                                icon: Icons.search_rounded,
+                                value: mostSearched,
+                                label: 'Most Searched',
+                                sublabel: 'tap to search',
+                                color: AppColors.catGreen,
+                              ),
+                            );
                           },
-                          child: _StatCard(
-                            icon: Icons.trending_up_rounded,
-                            value: topItemName,
-                            label: 'Top Item',
-                            sublabel: 'tap to search',
-                            color: AppColors.catGreen,
-                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -341,7 +357,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
-                      onSubmitted: (_) => widget.onOpenPriceChecker(),
+                      onSubmitted: (value) {
+                        trackSearch(value); // 👈 saves search to Firestore
+                        widget
+                            .onOpenPriceChecker(); // existing — keeps original behavior
+                      },
                       decoration: InputDecoration(
                         hintText: 'Search item to verify price…',
                         prefixIcon: const Icon(Icons.search_rounded,

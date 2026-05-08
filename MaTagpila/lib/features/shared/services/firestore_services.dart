@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/price_item_model.dart';
 import '../../transactions/models/transaction_model.dart';
@@ -140,6 +141,29 @@ class PricesService {
   Future<void> deleteItem(String docId) async {
     await _col.doc(docId).delete();
   }
+
+  /// Updates the name, unit, and category of a product document.
+  Future<void> updateDetails({
+    required String docId,
+    required String name,
+    required String unit,
+    required String category,
+    required String updatedBy,
+  }) async {
+    await _firestore.collection('prices').doc(docId).update({
+      'name': name,
+      'name_lowercase': name.toLowerCase(), // keep search index in sync
+      'unit': unit,
+      'category': category,
+      'updatedBy': updatedBy,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Permanently deletes a product document from Firestore.
+  Future<void> deleteProduct({required String docId}) async {
+    await _firestore.collection('prices').doc(docId).delete();
+  }
 }
 
 @riverpod
@@ -206,4 +230,40 @@ Stream<List<TransactionModel>> userTransactionsStream(Ref ref) {
   final user = ref.watch(authStateChangesProvider).value;
   if (user == null) return const Stream.empty();
   return ref.watch(transactionsServiceProvider).watchUserTransactions(user.uid);
+}
+
+// ─────────────────────────────────────────────
+//  MOST SEARCHED ITEM
+// ─────────────────────────────────────────────
+
+Future<void> trackSearch(String query) async {
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return;
+
+  final ref = FirebaseFirestore.instance.collection('searches').doc(q);
+
+  await ref.set(
+    {'query': q, 'count': FieldValue.increment(1)},
+    SetOptions(merge: true), // creates doc if not exists
+  );
+}
+
+Future<String> getMostSearchedItem() async {
+  try {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('searches')
+        .orderBy('count', descending: true)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) {
+      return 'No searches yet'; // Return a placeholder string, not null
+    }
+
+    // Ensure we access the correct field name ('query')
+    return snapshot.docs.first.data()['query'] as String? ?? 'None';
+  } catch (e) {
+    debugPrint('Error fetching most searched: $e');
+    return '-'; // Fallback string on error
+  }
 }
