@@ -17,11 +17,10 @@ final _searchResultsProvider =
     FutureProvider.autoDispose<List<PriceItem>>((ref) async {
   final q = ref.watch(_searchQueryProvider);
   if (q.trim().isEmpty) return [];
-  await Future.delayed(const Duration(milliseconds: 300)); // debounce
+  await Future.delayed(const Duration(milliseconds: 300));
   return ref.read(pricesServiceProvider).searchByName(q);
 });
 
-/// Tracks which item (by id) is currently expanded for price editing.
 final _expandedItemIdProvider = StateProvider<String?>((_) => null);
 
 // ─────────────────────────────────────────────
@@ -50,148 +49,244 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
     final allAsync = ref.watch(allPricesStreamProvider);
     final fmt = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
-    return CustomScrollView(
-      slivers: [
-        // ── Hero header ──────────────────────────────
-        SliverToBoxAdapter(
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFFFF6B00), Color(0xFFFF8C38)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return Container(
+      // ── Warm cream background matching Add Price Info screen ──
+      color: const Color(0xFFFFF5EE),
+      child: CustomScrollView(
+        slivers: [
+          // ── Header card (flat white, same style as Add Price Info) ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                decoration: BoxDecoration(
+                  color: AppColors.orange,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(10),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'Ma.Tagpila',
-                        style: AppTextStyles.displayMd
-                            .copyWith(color: Colors.white),
+                    // Orange icon badge
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.orangeSurface,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.orange,
+                        size: 24,
                       ),
                     ),
+                    const SizedBox(width: 14),
+                    // Title + subtitle
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Ma.Tagpila',
+                              style: AppTextStyles.displayMd.copyWith(
+                                color: AppColors.white,
+                              )),
+                          Text(
+                            'Check prices in your store',
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: AppColors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Mascot logo
                     Image.asset(
                       'assets/images/logo.png',
-                      height: 65,
+                      height: 60,
                       fit: BoxFit.fitHeight,
-                      errorBuilder: (_, __, ___) => const Icon(
-                        Icons.storefront_rounded,
-                        color: Colors.white,
-                        size: 34,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: AppColors.orangeSurface,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.storefront_rounded,
+                          color: AppColors.orange,
+                          size: 26,
+                        ),
                       ),
                     ),
                   ],
                 ),
-
-                Text(
-                  'Check prices in your store',
-                  style: AppTextStyles.bodyMd.copyWith(color: Colors.white70),
-                ),
-                const SizedBox(height: 20),
-                // Search bar
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(30),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (v) =>
-                        ref.read(_searchQueryProvider.notifier).state = v,
-                    decoration: InputDecoration(
-                      hintText: 'Search item (e.g. Camia, rice, soap…)',
-                      hintStyle: AppTextStyles.bodyMd,
-                      prefixIcon: const Icon(Icons.search_rounded,
-                          color: AppColors.orange),
-                      suffixIcon: query.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded,
-                                  color: AppColors.textMuted),
-                              onPressed: () {
-                                _searchController.clear();
-                                ref.read(_searchQueryProvider.notifier).state =
-                                    '';
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
 
-        // ── Body ─────────────────────────────────────
-        if (query.isEmpty) ...[
+          // ── Search bar (standalone card below header) ──
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFE8E8E8)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(8),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (v) =>
+                      ref.read(_searchQueryProvider.notifier).state = v,
+                  style: AppTextStyles.headingSm,
+                  decoration: InputDecoration(
+                    hintText: 'Search item (e.g. Camia, rice, soap…)',
+                    hintStyle:
+                        AppTextStyles.bodyMd.copyWith(color: Colors.grey[400]),
+                    prefixIcon: const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.orange,
+                    ),
+                    suffixIcon: query.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(
+                              Icons.cancel_rounded,
+                              color: AppColors.textMuted,
+                              size: 20,
+                            ),
+                            onPressed: () {
+                              _searchController.clear();
+                              ref.read(_searchQueryProvider.notifier).state =
+                                  '';
+                            },
+                          )
+                        : null,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Section label ─────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              child: Text('Recently Added',
-                  style: AppTextStyles.headingSm
-                      .copyWith(color: AppColors.textSecondary)),
-            ),
-          ),
-          allAsync.when(
-            data: (items) => items.isEmpty
-                ? const SliverToBoxAdapter(
-                    child: _EmptyState(
-                        message: 'No items yet. Be the first to add!'),
-                  )
-                : SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _PriceCard(item: items[i], formatter: fmt),
-                      childCount: items.take(20).length,
+              child: Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: AppColors.orange,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-            loading: () => const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator()),
+                  const SizedBox(width: 8),
+                  Text(
+                    query.isEmpty ? 'Recently Added' : 'Search Results',
+                    style: AppTextStyles.headingSm
+                        .copyWith(color: AppColors.textSecondary),
+                  ),
+                  if (query.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.orangeSurface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '"$query"',
+                        style: AppTextStyles.bodySm.copyWith(
+                          color: AppColors.orange,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            error: (e, _) => SliverToBoxAdapter(
-                child: _EmptyState(message: 'Failed to load: $e')),
           ),
-        ] else ...[
-          resultsAsync.when(
-            data: (items) => items.isEmpty
-                ? SliverToBoxAdapter(
-                    child: _EmptyState(message: 'No results for "$query"'),
-                  )
-                : SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (ctx, i) => _PriceCard(item: items[i], formatter: fmt),
-                      childCount: items.length,
+
+          // ── Results ───────────────────────────────────
+          if (query.isEmpty) ...[
+            allAsync.when(
+              data: (items) => items.isEmpty
+                  ? const SliverToBoxAdapter(
+                      child: _EmptyState(
+                          message: 'No items yet. Be the first to add!'),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (ctx, i) => _PriceCard(item: items[i], formatter: fmt),
+                        childCount: items.take(20).length,
+                      ),
+                    ),
+              loading: () => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.orange,
+                      strokeWidth: 2.5,
                     ),
                   ),
-            loading: () => const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(40),
-                child: Center(child: CircularProgressIndicator()),
+                ),
               ),
+              error: (e, _) => SliverToBoxAdapter(
+                  child: _EmptyState(message: 'Failed to load: $e')),
             ),
-            error: (e, _) => SliverToBoxAdapter(
-                child: _EmptyState(message: 'Search error: $e')),
-          ),
+          ] else ...[
+            resultsAsync.when(
+              data: (items) => items.isEmpty
+                  ? SliverToBoxAdapter(
+                      child: _EmptyState(message: 'No results for "$query"'),
+                    )
+                  : SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (ctx, i) => _PriceCard(item: items[i], formatter: fmt),
+                        childCount: items.length,
+                      ),
+                    ),
+              loading: () => const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.orange,
+                      strokeWidth: 2.5,
+                    ),
+                  ),
+                ),
+              ),
+              error: (e, _) => SliverToBoxAdapter(
+                  child: _EmptyState(message: 'Search error: $e')),
+            ),
+          ],
+
+          const SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-      ],
+      ),
     );
   }
 }
@@ -239,7 +334,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
 
   void _toggleEdit() {
     final currentId = ref.read(_expandedItemIdProvider);
-
     if (currentId == widget.item.id) {
       ref.read(_expandedItemIdProvider.notifier).state = null;
       _animCtrl.reverse();
@@ -262,7 +356,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     }
 
     setState(() => _isSaving = true);
-
     try {
       final uid = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
       await ref.read(pricesServiceProvider).updatePrice(
@@ -295,7 +388,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     }
   }
 
-  // ── Three-dot menu ────────────────────────────
   void _showOptionsMenu(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -314,7 +406,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     );
   }
 
-  // ── Edit details bottom sheet ─────────────────
   void _showEditDetailsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -355,7 +446,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     );
   }
 
-  // ── Delete confirmation dialog ────────────────
   void _showDeleteDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -407,126 +497,153 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     final updated = DateFormat('MMM d, y').format(widget.item.updatedAt);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      margin: const EdgeInsets.fromLTRB(16, 5, 16, 5),
       decoration: BoxDecoration(
         color: AppColors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withAlpha(8),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Main row ──────────────────────────────────
-          ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            leading: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.orangeSurface,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.inventory_2_rounded,
-                  color: AppColors.orange, size: 22),
-            ),
-            title: Text(widget.item.name, style: AppTextStyles.headingSm),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // ── Main content row ─────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    const Icon(Icons.storefront_rounded,
-                        size: 12, color: AppColors.textMuted),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        widget.item.store.isNotEmpty
-                            ? widget.item.store
-                            : 'Unknown Store',
-                        style: AppTextStyles.bodySm,
+                // ── Left: icon badge ─────────────────────
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: AppColors.orangeSurface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.inventory_2_rounded,
+                    color: AppColors.orange,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // ── Centre: name + meta ───────────────────
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.item.name,
+                        style: AppTextStyles.headingSm,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      // Category chip
+                      if (widget.item.category.isNotEmpty)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.orangeSurface,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            widget.item.category,
+                            style: AppTextStyles.bodySm.copyWith(
+                              color: AppColors.orange,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.storefront_rounded,
+                              size: 11, color: AppColors.textMuted),
+                          const SizedBox(width: 3),
+                          Flexible(
+                            child: Text(
+                              widget.item.store.isNotEmpty
+                                  ? widget.item.store
+                                  : 'Unknown Store',
+                              style: AppTextStyles.bodySm,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.access_time_rounded,
+                              size: 11, color: AppColors.textMuted),
+                          const SizedBox(width: 3),
+                          Text(updated, style: AppTextStyles.bodySm),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 2),
-                Text('Updated $updated', style: AppTextStyles.bodySm),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Price display
+
+                const SizedBox(width: 8),
+
+                // ── Right: price + action buttons ─────────
                 Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    // Price display
                     Text(
                       widget.formatter.format(widget.item.price),
                       style: AppTextStyles.priceMd
                           .copyWith(color: AppColors.orange),
                     ),
-                    Text('per ${widget.item.unit}',
-                        style: AppTextStyles.bodySm),
+                    Text(
+                      'per ${widget.item.unit}',
+                      style: AppTextStyles.bodySm,
+                    ),
+                    const SizedBox(height: 8),
+                    // Action buttons row
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Edit price toggle
+                        AnimatedBuilder(
+                          animation: _expandAnim,
+                          builder: (_, __) => _ActionButton(
+                            onTap: _toggleEdit,
+                            icon: shouldBeExpanded
+                                ? Icons.close_rounded
+                                : Icons.edit_rounded,
+                            backgroundColor: shouldBeExpanded
+                                ? AppColors.orange
+                                : AppColors.orangeSurface,
+                            iconColor: shouldBeExpanded
+                                ? Colors.white
+                                : AppColors.orange,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        // Three-dot menu
+                        _ActionButton(
+                          onTap: () => _showOptionsMenu(context),
+                          icon: Icons.more_horiz_rounded,
+                          backgroundColor: const Color(0xFFF0F0F0),
+                          iconColor: AppColors.textMuted,
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-                const SizedBox(width: 4),
-
-                // ── Edit price button (existing) ───────
-                AnimatedBuilder(
-                  animation: _expandAnim,
-                  builder: (_, __) => IconButton(
-                    onPressed: _toggleEdit,
-                    style: IconButton.styleFrom(
-                      backgroundColor: shouldBeExpanded
-                          ? AppColors.orange
-                          : AppColors.orangeSurface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.all(8),
-                      minimumSize: const Size(36, 36),
-                    ),
-                    icon: Icon(
-                      shouldBeExpanded
-                          ? Icons.close_rounded
-                          : Icons.edit_rounded,
-                      size: 18,
-                      color: shouldBeExpanded ? Colors.white : AppColors.orange,
-                    ),
-                  ),
-                ),
-
-                // ── Three-dot menu button (NEW) ────────
-                IconButton(
-                  onPressed: () => _showOptionsMenu(context),
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFFF5F5F5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    padding: const EdgeInsets.all(8),
-                    minimumSize: const Size(36, 36),
-                  ),
-                  icon: const Icon(
-                    Icons.more_vert_rounded,
-                    size: 18,
-                    color: AppColors.textMuted,
-                  ),
                 ),
               ],
             ),
           ),
 
-          // ── Inline price edit panel (unchanged) ───
+          // ── Inline price edit panel ──────────────────
           SizeTransition(
             sizeFactor: _expandAnim,
             child: _InlineEditPanel(
@@ -538,6 +655,39 @@ class _PriceCardState extends ConsumerState<_PriceCard>
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  ACTION BUTTON  (small square icon button)
+// ─────────────────────────────────────────────
+class _ActionButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final IconData icon;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _ActionButton({
+    required this.onTap,
+    required this.icon,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 17, color: iconColor),
       ),
     );
   }
@@ -586,14 +736,14 @@ class _OptionsMenuSheet extends StatelessWidget {
             child: Row(
               children: [
                 Container(
-                  width: 40,
-                  height: 40,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: AppColors.orangeSurface,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.inventory_2_rounded,
-                      color: AppColors.orange, size: 20),
+                      color: AppColors.orange, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -602,9 +752,11 @@ class _OptionsMenuSheet extends StatelessWidget {
                     children: [
                       Text(item.name, style: AppTextStyles.headingSm),
                       if (item.category.isNotEmpty)
-                        Text(item.category,
-                            style: AppTextStyles.bodySm
-                                .copyWith(color: Colors.grey)),
+                        Text(
+                          item.category,
+                          style:
+                              AppTextStyles.bodySm.copyWith(color: Colors.grey),
+                        ),
                     ],
                   ),
                 ),
@@ -620,14 +772,14 @@ class _OptionsMenuSheet extends StatelessWidget {
           ListTile(
             onTap: onEditDetails,
             leading: Container(
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: const Color(0xFFEEF4FF),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.tune_rounded,
-                  color: Color(0xFF4A7EFF), size: 20),
+                  color: Color(0xFF4A7EFF), size: 22),
             ),
             title: Text('Edit Details', style: AppTextStyles.headingSm),
             subtitle: Text(
@@ -642,14 +794,14 @@ class _OptionsMenuSheet extends StatelessWidget {
           ListTile(
             onTap: onDelete,
             leading: Container(
-              width: 40,
-              height: 40,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(Icons.delete_outline_rounded,
-                  color: AppColors.error, size: 20),
+                  color: AppColors.error, size: 22),
             ),
             title: Text(
               'Delete Product',
@@ -690,7 +842,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   late String _selectedCategory;
   bool _isSaving = false;
 
-  // Common categories — adjust to match your app's categories
   static const _categories = [
     'Food Grocery',
     'Frozen Goods',
@@ -780,36 +931,38 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
               ),
               const SizedBox(height: 20),
 
-              // Title
+              // Title row
               Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
                       color: const Color(0xFFEEF4FF),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.tune_rounded,
-                        color: Color(0xFF4A7EFF), size: 20),
+                        color: Color(0xFF4A7EFF), size: 22),
                   ),
                   const SizedBox(width: 12),
-                  Text('Edit Details', style: AppTextStyles.headingLg),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Edit Details', style: AppTextStyles.headingLg),
+                      Text(
+                        'Update name, unit, or category',
+                        style:
+                            AppTextStyles.bodySm.copyWith(color: Colors.grey),
+                      ),
+                    ],
+                  ),
                 ],
-              ),
-              const SizedBox(height: 4),
-              Padding(
-                padding: const EdgeInsets.only(left: 52),
-                child: Text(
-                  'Update name, unit, or category',
-                  style: AppTextStyles.bodySm.copyWith(color: Colors.grey),
-                ),
               ),
 
               const SizedBox(height: 24),
 
-              // ── Product Name field ──────────────────
-              _FieldLabel(label: 'Product Name'),
+              // Product Name
+              const _FieldLabel(label: 'Product Name'),
               const SizedBox(height: 8),
               _InputField(
                 controller: _nameCtrl,
@@ -820,8 +973,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
               const SizedBox(height: 20),
 
-              // ── Unit field ──────────────────────────
-              _FieldLabel(label: 'Unit'),
+              // Unit
+              const _FieldLabel(label: 'Unit'),
               const SizedBox(height: 8),
               _InputField(
                 controller: _unitCtrl,
@@ -838,8 +991,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
               const SizedBox(height: 20),
 
-              // ── Category dropdown ───────────────────
-              _FieldLabel(label: 'Category'),
+              // Category
+              const _FieldLabel(label: 'Category'),
               const SizedBox(height: 8),
               Container(
                 height: 52,
@@ -880,10 +1033,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
               const SizedBox(height: 32),
 
-              // ── Action buttons ──────────────────────
+              // Action buttons
               Row(
                 children: [
-                  // Cancel
                   Expanded(
                     child: SizedBox(
                       height: 52,
@@ -905,7 +1057,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Save
                   Expanded(
                     flex: 2,
                     child: SizedBox(
@@ -951,133 +1102,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 }
 
 // ─────────────────────────────────────────────
-//  DELETE CONFIRM DIALOG
-// ─────────────────────────────────────────────
-class _DeleteConfirmDialog extends StatefulWidget {
-  final String itemName;
-  final Future<void> Function() onConfirm;
-
-  const _DeleteConfirmDialog({required this.itemName, required this.onConfirm});
-
-  @override
-  State<_DeleteConfirmDialog> createState() => _DeleteConfirmDialogState();
-}
-
-class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
-  bool _isDeleting = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Warning icon
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.delete_outline_rounded,
-                color: AppColors.error, size: 32),
-          ),
-          const SizedBox(height: 16),
-          Text('Delete Product?', style: AppTextStyles.headingLg),
-          const SizedBox(height: 10),
-          RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: AppTextStyles.bodySm
-                  .copyWith(color: Colors.grey[600], height: 1.5),
-              children: [
-                const TextSpan(text: 'You are about to permanently delete '),
-                TextSpan(
-                  text: '"${widget.itemName}"',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black87,
-                  ),
-                ),
-                const TextSpan(text: '. This action cannot be undone.'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          // Buttons
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: OutlinedButton(
-                    onPressed:
-                        _isDeleting ? null : () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFFE0E0E0)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: AppTextStyles.headingSm
-                          .copyWith(color: AppColors.textSecondary),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isDeleting
-                        ? null
-                        : () async {
-                            setState(() => _isDeleting = true);
-                            await widget.onConfirm();
-                            if (context.mounted) Navigator.of(context).pop();
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppColors.error.withAlpha(120),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: _isDeleting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text(
-                            'Delete',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 14,
-                            ),
-                          ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  INLINE EDIT PANEL  (price — unchanged)
+//  INLINE EDIT PANEL
 // ─────────────────────────────────────────────
 class _InlineEditPanel extends StatelessWidget {
   final PriceItem item;
@@ -1097,18 +1122,28 @@ class _InlineEditPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF5EE),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFFDDC2)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Divider(height: 1, thickness: 1, color: Color(0xFFF0F0F0)),
-          const SizedBox(height: 12),
-          Text(
-            'Update price for ${item.name}',
-            style: AppTextStyles.bodySm.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              const Icon(Icons.edit_rounded, size: 14, color: AppColors.orange),
+              const SizedBox(width: 6),
+              Text(
+                'Update price for ${item.name}',
+                style: AppTextStyles.bodySm.copyWith(
+                  color: AppColors.orange,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
           Row(
@@ -1117,7 +1152,7 @@ class _InlineEditPanel extends StatelessWidget {
                 child: Container(
                   height: 48,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFAFAFA),
+                    color: AppColors.white,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: const Color(0xFFE8E8E8)),
                   ),
@@ -1205,6 +1240,130 @@ class _InlineEditPanel extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
+//  DELETE CONFIRM DIALOG
+// ─────────────────────────────────────────────
+class _DeleteConfirmDialog extends StatefulWidget {
+  final String itemName;
+  final Future<void> Function() onConfirm;
+
+  const _DeleteConfirmDialog({required this.itemName, required this.onConfirm});
+
+  @override
+  State<_DeleteConfirmDialog> createState() => _DeleteConfirmDialogState();
+}
+
+class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
+  bool _isDeleting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.delete_outline_rounded,
+                color: AppColors.error, size: 32),
+          ),
+          const SizedBox(height: 16),
+          Text('Delete Product?', style: AppTextStyles.headingLg),
+          const SizedBox(height: 10),
+          RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: AppTextStyles.bodySm
+                  .copyWith(color: Colors.grey[600], height: 1.5),
+              children: [
+                const TextSpan(text: 'You are about to permanently delete '),
+                TextSpan(
+                  text: '"${widget.itemName}"',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                ),
+                const TextSpan(text: '. This action cannot be undone.'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed:
+                        _isDeleting ? null : () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Color(0xFFE0E0E0)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: AppTextStyles.headingSm
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isDeleting
+                        ? null
+                        : () async {
+                            setState(() => _isDeleting = true);
+                            await widget.onConfirm();
+                            if (context.mounted) Navigator.of(context).pop();
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: AppColors.error.withAlpha(120),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: _isDeleting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Delete',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 14,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
 //  SHARED SMALL WIDGETS
 // ─────────────────────────────────────────────
 class _FieldLabel extends StatelessWidget {
@@ -1272,14 +1431,28 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(48),
+      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 56),
       child: Column(
         children: [
-          const Icon(Icons.search_off_rounded,
-              size: 48, color: AppColors.textMuted),
-          const SizedBox(height: 12),
-          Text(message,
-              style: AppTextStyles.bodyMd, textAlign: TextAlign.center),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.orangeSurface,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.search_off_rounded,
+              size: 36,
+              color: AppColors.orange,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: AppTextStyles.bodyMd,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

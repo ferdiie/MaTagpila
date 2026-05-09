@@ -1,13 +1,15 @@
 // lib/screens/reports_screen.dart
-import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:open_file/open_file.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+
+// Platform-conditional imports
+import '../utils/pdf_save_helper.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/models/price_item_model.dart';
@@ -636,11 +638,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Future<void> _saveAndOpen(pw.Document pdf, String filename) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File('${dir.path}/$filename');
-    await file.writeAsBytes(await pdf.save());
+    final bytes = Uint8List.fromList(await pdf.save());
+    final path = await PdfSaveHelper.save(bytes, filename);
     if (!mounted) return;
-    _showDownloadSuccess(file.path, filename);
+    _showDownloadSuccess(path, filename);
   }
 
   String _fileDate(DateTime dt) => DateFormat('yyyyMMdd').format(dt);
@@ -667,20 +668,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  void _showDownloadSuccess(String path, String filename) {
+  void _showDownloadSuccess(String? path, String filename) {
+    if (!mounted) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => _DownloadSuccessSheet(
         filename: filename,
-        onOpen: () {
-          Navigator.pop(context);
-          OpenFile.open(path);
-        },
-        onShare: () {
-          Navigator.pop(context);
-          Share.shareXFiles([XFile(path)], subject: filename);
-        },
+        onOpen: (path == null || kIsWeb)
+            ? null
+            : () {
+                Navigator.pop(context);
+                PdfSaveHelper.open(path);
+              },
+        onShare: path == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                Share.shareXFiles([XFile(path)], subject: filename);
+              },
       ),
     );
   }
@@ -1029,13 +1035,13 @@ class _ReportCard extends StatelessWidget {
 // ─────────────────────────────────────────────
 class _DownloadSuccessSheet extends StatelessWidget {
   final String filename;
-  final VoidCallback onOpen;
-  final VoidCallback onShare;
+  final VoidCallback? onOpen; // nullable — hidden on web
+  final VoidCallback? onShare; // nullable — hidden on web
 
   const _DownloadSuccessSheet({
     required this.filename,
-    required this.onOpen,
-    required this.onShare,
+    this.onOpen,
+    this.onShare,
   });
 
   @override
@@ -1076,48 +1082,75 @@ class _DownloadSuccessSheet extends StatelessWidget {
               style: AppTextStyles.bodySm.copyWith(color: Colors.grey),
               textAlign: TextAlign.center),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 48,
-                  child: OutlinedButton.icon(
-                    onPressed: onShare,
-                    icon: const Icon(Icons.share_rounded, size: 18),
-                    label: const Text('Share'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.orange,
-                      side:
-                          const BorderSide(color: AppColors.orange, width: 1.2),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+          // Only show buttons if callbacks are available (hidden on web)
+          if (onShare != null || onOpen != null)
+            Row(
+              children: [
+                if (onShare != null) ...[
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: onShare,
+                        icon: const Icon(Icons.share_rounded, size: 18),
+                        label: const Text('Share'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.orange,
+                          side: const BorderSide(
+                              color: AppColors.orange, width: 1.2),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: SizedBox(
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: onOpen,
-                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                    label: const Text('Open PDF',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w700, fontSize: 14)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.orange,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
+                  if (onOpen != null) const SizedBox(width: 12),
+                ],
+                if (onOpen != null)
+                  Expanded(
+                    flex: 2,
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: onOpen,
+                        icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                        label: const Text('Open PDF',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 14)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.orange,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+              ],
+            ),
+          // Web-only message when no buttons shown
+          if (onShare == null && onOpen == null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0FFF4),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.download_done_rounded,
+                      color: Color(0xFF2E7D32), size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Downloaded to your device',
+                    style: AppTextStyles.bodySm
+                        .copyWith(color: const Color(0xFF2E7D32)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
