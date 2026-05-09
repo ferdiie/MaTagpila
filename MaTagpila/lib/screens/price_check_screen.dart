@@ -77,8 +77,8 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                     ),
                     Image.asset(
                       'assets/images/logo.png',
-                      height: 62,
-                      fit: BoxFit.contain,
+                      height: 65,
+                      fit: BoxFit.fitHeight,
                       errorBuilder: (_, __, ___) => const Icon(
                         Icons.storefront_rounded,
                         color: Colors.white,
@@ -87,9 +87,9 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+
                 Text(
-                  'Check prices in your community',
+                  'Check prices in your store',
                   style: AppTextStyles.bodyMd.copyWith(color: Colors.white70),
                 ),
                 const SizedBox(height: 20),
@@ -692,18 +692,17 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
 
   // Common categories — adjust to match your app's categories
   static const _categories = [
-    'Beverages',
+    'Food Grocery',
+    'Frozen Goods',
     'Canned Goods',
-    'Condiments',
-    'Dairy',
-    'Frozen',
-    'Grains & Rice',
-    'Household',
-    'Hygiene',
-    'Meat & Poultry',
-    'Noodles',
+    'Powdered Sachets',
     'Snacks',
-    'Vegetables',
+    'Alcoholic Drinks',
+    'Beverages',
+    'School Supplies',
+    'Household & Personal Care',
+    'Condiments',
+    'Cigarettes',
     'Others',
   ];
 
@@ -714,7 +713,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
     _unitCtrl = TextEditingController(text: widget.item.unit);
     _selectedCategory = _categories.contains(widget.item.category)
         ? widget.item.category
-        : 'Others';
+        : 'Food Grocery';
   }
 
   @override

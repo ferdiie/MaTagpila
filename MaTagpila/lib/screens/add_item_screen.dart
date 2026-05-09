@@ -7,14 +7,18 @@ import '../core/theme/app_theme.dart';
 import '../features/shared/services/firestore_services.dart';
 
 const _categories = [
-  'General',
-  'Food & Grocery',
+  'Food Grocery',
+  'Frozen Goods',
+  'Canned Goods',
+  'Powdered Sachets',
+  'Snacks',
+  'Alcoholic Drinks',
   'Beverages',
-  'Household',
-  'Personal Care',
-  'Medicine',
   'School Supplies',
-  'Other',
+  'Household & Personal Care',
+  'Condiments',
+  'Cigarettes',
+  'Others',
 ];
 
 const _units = ['pc', 'kg', 'g', 'L', 'mL', 'pack', 'bottle', 'box', 'sachet'];
@@ -33,7 +37,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
   final _storeCtrl = TextEditingController();
   final _barcodeCtrl = TextEditingController();
 
-  String _selectedCategory = 'General';
+  String _selectedCategory = 'Food Grocery';
   String _selectedUnit = 'pc';
   bool _saving = false;
 

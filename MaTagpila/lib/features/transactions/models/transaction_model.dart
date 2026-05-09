@@ -24,14 +24,12 @@ class TransactionModel {
     final data = doc.data() as Map<String, dynamic>;
     return TransactionModel(
       id: doc.id,
-      // 'total' matches what saveTransaction() writes to Firestore
-      totalAmount: (data['total'] ?? data['totalAmount'] ?? 0.0).toDouble(),
-      // 'tendered' matches what saveTransaction() writes to Firestore
-      cashGiven: (data['tendered'] ?? data['cashGiven'] ?? 0.0).toDouble(),
-      change: (data['change'] ?? 0.0).toDouble(),
-      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      items: List<dynamic>.from(data['items'] ?? []),
       sellerId: data['sellerId'] ?? '',
+      items: List<Map<String, dynamic>>.from(data['items'] ?? []),
+      totalAmount: (data['totalAmount'] as num?)?.toDouble() ?? 0.0, // ✅
+      cashGiven: (data['cashGiven'] as num?)?.toDouble() ?? 0.0, // ✅
+      change: (data['change'] as num?)?.toDouble() ?? 0.0,
+      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 }

@@ -165,5 +165,22 @@ final userTransactionsStreamProvider =
 // ignore: unused_element
 typedef UserTransactionsStreamRef
     = AutoDisposeStreamProviderRef<List<TransactionModel>>;
+String _$userStoreNameHash() => r'46b89f2b6c0b06e5ff76e516d52c2e9ab845ebb8';
+
+/// See also [userStoreName].
+@ProviderFor(userStoreName)
+final userStoreNameProvider = AutoDisposeFutureProvider<String>.internal(
+  userStoreName,
+  name: r'userStoreNameProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$userStoreNameHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef UserStoreNameRef = AutoDisposeFutureProviderRef<String>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

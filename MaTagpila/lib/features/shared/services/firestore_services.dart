@@ -164,6 +164,15 @@ class PricesService {
   Future<void> deleteProduct({required String docId}) async {
     await _firestore.collection('prices').doc(docId).delete();
   }
+
+  /// Returns every product document, sorted by name.
+  /// Used by the Full Price List and Products by Category reports.
+  Future<List<PriceItem>> getAllPrices() async {
+    final snapshot =
+        await _firestore.collection('prices').orderBy('name_lowercase').get();
+
+    return snapshot.docs.map((doc) => PriceItem.fromSnapshot(doc)).toList();
+  }
 }
 
 @riverpod
@@ -210,11 +219,34 @@ class TransactionsService {
     await _col.add({
       'sellerId': sellerId,
       'items': items,
-      'total': total,
-      'tendered': tendered,
+      'totalAmount': total,
+      'cashGiven': tendered,
       'change': change,
       'timestamp': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  /// Returns all transactions between [from] (inclusive) and [to] (inclusive),
+  /// ordered by createdAt ascending.
+  /// Used by the Transaction Report.
+  Future<List<TransactionModel>> getTransactionsByRange({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    // Make 'to' cover the full end day (up to 23:59:59)
+    final toEndOfDay = DateTime(to.year, to.month, to.day, 23, 59, 59);
+
+    final snapshot = await _firestore
+        .collection('transactions')
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
+        .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(toEndOfDay))
+        .orderBy('createdAt', descending: false)
+        .get();
+
+    return snapshot.docs
+        .map((doc) => TransactionModel.fromSnapshot(doc))
+        .toList();
   }
 }
 
@@ -266,4 +298,15 @@ Future<String> getMostSearchedItem() async {
     debugPrint('Error fetching most searched: $e');
     return '-'; // Fallback string on error
   }
+}
+
+@riverpod
+Future<String> userStoreName(Ref ref) async {
+  final uid = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  if (uid == null) return 'Your Store';
+
+  final doc =
+      await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+  return doc.data()?['storeName'] ?? 'Your Store';
 }

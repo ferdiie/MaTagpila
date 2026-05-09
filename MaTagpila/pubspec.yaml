@@ -46,6 +46,18 @@ dependencies:
   # Local storage
   shared_preferences: ^2.2.3
 
+  # PDF generation
+  pdf: ^3.10.8
+
+  # File system path
+  path_provider: ^2.1.2
+
+  # Open PDF with native viewer
+  open_file: ^3.3.2
+
+  # Share PDF via share sheet
+  share_plus: ^7.2.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

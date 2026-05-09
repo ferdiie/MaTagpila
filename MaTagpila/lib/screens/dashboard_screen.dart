@@ -215,8 +215,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final displayName = user?.email?.split('@').first ?? 'Your Store';
+    
+    final displayName = ref.watch(userStoreNameProvider).value ?? 'Your Store';
     final categoriesAsync = ref.watch(dashboardCategoriesProvider);
     final filteredProductsAsync =
         ref.watch(dashboardFilteredProductsProvider(_query));
@@ -256,16 +256,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
             final allProducts = recentProductsAsync.valueOrNull ?? [];
 
-            final topItemName = () {
-              if (allProducts.isEmpty) return '-';
-              final nameCounts = <String, int>{};
-              for (final item in allProducts) {
-                nameCounts[item.name] = (nameCounts[item.name] ?? 0) + 1;
-              }
-              final sortedNames = nameCounts.entries.toList()
-                ..sort((a, b) => b.value.compareTo(a.value));
-              return sortedNames.first.key;
-            }();
+            
 
             // ── Today's total sales from transactions ──────────────────
             final transactionsAsync = ref.watch(userTransactionsStreamProvider);
@@ -685,20 +676,20 @@ class _WelcomeBanner extends StatelessWidget {
 
                 // Right: big logo
                 Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.25),
-                      width: 1.5,
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(8),
+                  width: 150,
+                  height: 140,
+                  // decoration: BoxDecoration(
+                  //   color: Colors.white.withValues(alpha: 0.15),
+                  //   borderRadius: BorderRadius.circular(20),
+                  //   border: Border.all(
+                  //     color: Colors.white.withValues(alpha: 0.25),
+                  //     width: 1.5,
+                  //   ),
+                  // ),
+                  // padding: const EdgeInsets.all(8),
                   child: Image.asset(
                     'assets/images/logo.png',
-                    fit: BoxFit.contain,
+                    fit: BoxFit.fitHeight,
                     errorBuilder: (_, __, ___) => Icon(
                       Icons.storefront_rounded,
                       color: Colors.white.withValues(alpha: 0.9),
