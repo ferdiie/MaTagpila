@@ -1,3 +1,4 @@
+// lib/screens/dashboard_screen.dart
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -197,10 +198,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   @override
   void initState() {
     super.initState();
-    // We call the service and ensure it handles the result
+    // getMostSearchedItem reads from /users/{uid}/searches — user-scoped.
     _mostSearchedFuture = getMostSearchedItem();
   }
 
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -215,7 +217,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
   @override
   Widget build(BuildContext context) {
-    
+    // userStoreNameProvider reads from /users/{uid} — user-scoped.
     final displayName = ref.watch(userStoreNameProvider).value ?? 'Your Store';
     final categoriesAsync = ref.watch(dashboardCategoriesProvider);
     final filteredProductsAsync =
@@ -230,7 +232,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        // ── Welcome Banner (full redesign) ───────────────────────────────
+        // ── Welcome Banner ────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: _WelcomeBanner(
             greeting: _greeting(),
@@ -238,7 +240,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
           ),
         ),
 
-        // ── Main content ─────────────────────────────────────────────────
+        // ── Main content ──────────────────────────────────────────────────
         filteredProductsAsync.when(
           data: (filteredProducts) {
             final recentItems =
@@ -256,9 +258,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
             final allProducts = recentProductsAsync.valueOrNull ?? [];
 
-            
-
-            // ── Today's total sales from transactions ──────────────────
+            // Today's sales — reads from /users/{uid}/transactions — user-scoped.
             final transactionsAsync = ref.watch(userTransactionsStreamProvider);
             final transactions =
                 transactionsAsync.valueOrNull ?? <TransactionModel>[];
@@ -273,7 +273,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               delegate: SliverChildListDelegate([
                 const SizedBox(height: 4),
 
-                // ── Stat cards ──────────────────────────────────────────
+                // ── Stat cards ─────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -329,7 +329,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 ),
 
-                // ── Search bar ──────────────────────────────────────────
+                // ── Search bar ─────────────────────────────────────────
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -349,9 +349,9 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
                       onSubmitted: (value) {
-                        trackSearch(value); // 👈 saves search to Firestore
-                        widget
-                            .onOpenPriceChecker(); // existing — keeps original behavior
+                        // trackSearch saves to /users/{uid}/searches — user-scoped.
+                        trackSearch(value);
+                        widget.onOpenPriceChecker();
                       },
                       decoration: InputDecoration(
                         hintText: 'Search item to verify price…',
@@ -380,7 +380,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   ),
                 ),
 
-                // ── Recent price changes ────────────────────────────────
+                // ── Recent price changes ───────────────────────────────
                 const SizedBox(height: 22),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
@@ -428,7 +428,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         ),
                 ),
 
-                // ── Browse by category ──────────────────────────────────
+                // ── Browse by category ─────────────────────────────────
                 const SizedBox(height: 22),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -444,7 +444,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   },
                 ),
 
-                // ── All products ────────────────────────────────────────
+                // ── All products ───────────────────────────────────────
                 const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -533,7 +533,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Welcome Banner — full redesign
+//  Welcome Banner
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _WelcomeBanner extends StatelessWidget {
@@ -567,7 +567,6 @@ class _WelcomeBanner extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Decorative circle background blobs
           Positioned(
             right: -20,
             top: -20,
@@ -592,20 +591,16 @@ class _WelcomeBanner extends StatelessWidget {
               ),
             ),
           ),
-
-          // Content row
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 20, 16, 20),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Left: text
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // App brand
                       Row(
                         children: [
                           Container(
@@ -671,22 +666,10 @@ class _WelcomeBanner extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
-                // Right: big logo
                 Container(
                   width: 150,
                   height: 140,
-                  // decoration: BoxDecoration(
-                  //   color: Colors.white.withValues(alpha: 0.15),
-                  //   borderRadius: BorderRadius.circular(20),
-                  //   border: Border.all(
-                  //     color: Colors.white.withValues(alpha: 0.25),
-                  //     width: 1.5,
-                  //   ),
-                  // ),
-                  // padding: const EdgeInsets.all(8),
                   child: Image.asset(
                     'assets/images/logo.png',
                     fit: BoxFit.fitHeight,
@@ -707,7 +690,7 @@ class _WelcomeBanner extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Stat card — redesigned
+//  Stat card
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _StatCard extends StatelessWidget {
@@ -873,7 +856,6 @@ class _ProductListTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
-          // Freshness dot
           Container(
             width: 9,
             height: 9,
@@ -883,7 +865,6 @@ class _ProductListTile extends StatelessWidget {
               shape: BoxShape.circle,
             ),
           ),
-          // Name + category pill
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -916,7 +897,6 @@ class _ProductListTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // Price + updated date
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
@@ -954,7 +934,7 @@ Color _categoryColor(int index) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  Recent price card (horizontal scroll) — redesigned
+//  Recent price card (horizontal scroll)
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _RecentPriceCard extends StatelessWidget {

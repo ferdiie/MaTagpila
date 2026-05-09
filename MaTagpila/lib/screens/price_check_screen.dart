@@ -13,6 +13,8 @@ import '../features/shared/services/firestore_services.dart';
 // ─────────────────────────────────────────────
 final _searchQueryProvider = StateProvider<String>((_) => '');
 
+/// Search results are scoped to the current user via pricesServiceProvider,
+/// which internally uses /users/{uid}/prices — no cross-user data leaks.
 final _searchResultsProvider =
     FutureProvider.autoDispose<List<PriceItem>>((ref) async {
   final q = ref.watch(_searchQueryProvider);
@@ -46,15 +48,16 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
   Widget build(BuildContext context) {
     final query = ref.watch(_searchQueryProvider);
     final resultsAsync = ref.watch(_searchResultsProvider);
+    // allPricesStreamProvider is already user-scoped — only shows items
+    // belonging to the currently signed-in user.
     final allAsync = ref.watch(allPricesStreamProvider);
     final fmt = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
     return Container(
-      // ── Warm cream background matching Add Price Info screen ──
       color: const Color(0xFFFFF5EE),
       child: CustomScrollView(
         slivers: [
-          // ── Header card (flat white, same style as Add Price Info) ──
+          // ── Header card ───────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -74,7 +77,6 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    // Orange icon badge
                     Container(
                       width: 48,
                       height: 48,
@@ -89,7 +91,6 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    // Title + subtitle
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,7 +108,6 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                         ],
                       ),
                     ),
-                    // Mascot logo
                     Image.asset(
                       'assets/images/logo.png',
                       height: 60,
@@ -132,7 +132,7 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
             ),
           ),
 
-          // ── Search bar (standalone card below header) ──
+          // ── Search bar ────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
@@ -234,7 +234,8 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
               data: (items) => items.isEmpty
                   ? const SliverToBoxAdapter(
                       child: _EmptyState(
-                          message: 'No items yet. Be the first to add!'),
+                          message:
+                              'No items yet. Add your first product above!'),
                     )
                   : SliverList(
                       delegate: SliverChildBuilderDelegate(
@@ -358,6 +359,7 @@ class _PriceCardState extends ConsumerState<_PriceCard>
     setState(() => _isSaving = true);
     try {
       final uid = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
+      // updatePrice writes to /users/{uid}/prices/{docId} — user-scoped.
       await ref.read(pricesServiceProvider).updatePrice(
             docId: widget.item.id,
             newPrice: newPrice,
@@ -416,6 +418,7 @@ class _PriceCardState extends ConsumerState<_PriceCard>
         onSaved: (name, unit, category) async {
           try {
             final uid = ref.read(firebaseAuthProvider).currentUser?.uid ?? '';
+            // updateDetails writes to /users/{uid}/prices/{docId} — user-scoped.
             await ref.read(pricesServiceProvider).updateDetails(
                   docId: widget.item.id,
                   name: name,
@@ -453,6 +456,7 @@ class _PriceCardState extends ConsumerState<_PriceCard>
         itemName: widget.item.name,
         onConfirm: () async {
           try {
+            // deleteProduct removes /users/{uid}/prices/{docId} — user-scoped.
             await ref
                 .read(pricesServiceProvider)
                 .deleteProduct(docId: widget.item.id);
@@ -519,7 +523,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ── Left: icon badge ─────────────────────
                 Container(
                   width: 46,
                   height: 46,
@@ -534,8 +537,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
                   ),
                 ),
                 const SizedBox(width: 12),
-
-                // ── Centre: name + meta ───────────────────
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,7 +547,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 4),
-                      // Category chip
                       if (widget.item.category.isNotEmpty)
                         Container(
                           margin: const EdgeInsets.only(bottom: 4),
@@ -589,14 +589,10 @@ class _PriceCardState extends ConsumerState<_PriceCard>
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 8),
-
-                // ── Right: price + action buttons ─────────
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Price display
                     Text(
                       widget.formatter.format(widget.item.price),
                       style: AppTextStyles.priceMd
@@ -607,11 +603,9 @@ class _PriceCardState extends ConsumerState<_PriceCard>
                       style: AppTextStyles.bodySm,
                     ),
                     const SizedBox(height: 8),
-                    // Action buttons row
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Edit price toggle
                         AnimatedBuilder(
                           animation: _expandAnim,
                           builder: (_, __) => _ActionButton(
@@ -628,7 +622,6 @@ class _PriceCardState extends ConsumerState<_PriceCard>
                           ),
                         ),
                         const SizedBox(width: 6),
-                        // Three-dot menu
                         _ActionButton(
                           onTap: () => _showOptionsMenu(context),
                           icon: Icons.more_horiz_rounded,
@@ -661,7 +654,7 @@ class _PriceCardState extends ConsumerState<_PriceCard>
 }
 
 // ─────────────────────────────────────────────
-//  ACTION BUTTON  (small square icon button)
+//  ACTION BUTTON
 // ─────────────────────────────────────────────
 class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
@@ -694,7 +687,7 @@ class _ActionButton extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  OPTIONS MENU SHEET  (three-dot)
+//  OPTIONS MENU SHEET
 // ─────────────────────────────────────────────
 class _OptionsMenuSheet extends StatelessWidget {
   final PriceItem item;
@@ -718,7 +711,6 @@ class _OptionsMenuSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle
           const SizedBox(height: 12),
           Container(
             width: 40,
@@ -729,8 +721,6 @@ class _OptionsMenuSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-
-          // Item label
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
@@ -763,12 +753,9 @@ class _OptionsMenuSheet extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(height: 16),
           const Divider(height: 1, color: Color(0xFFF0F0F0)),
           const SizedBox(height: 8),
-
-          // Edit Details option
           ListTile(
             onTap: onEditDetails,
             leading: Container(
@@ -789,8 +776,6 @@ class _OptionsMenuSheet extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right_rounded,
                 color: Colors.grey, size: 20),
           ),
-
-          // Delete option
           ListTile(
             onTap: onDelete,
             leading: Container(
@@ -814,7 +799,6 @@ class _OptionsMenuSheet extends StatelessWidget {
             trailing: const Icon(Icons.chevron_right_rounded,
                 color: Colors.grey, size: 20),
           ),
-
           const SizedBox(height: 8),
         ],
       ),
@@ -918,7 +902,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle
               Center(
                 child: Container(
                   width: 40,
@@ -930,8 +913,6 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Title row
               Row(
                 children: [
                   Container(
@@ -958,10 +939,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 24),
-
-              // Product Name
               const _FieldLabel(label: 'Product Name'),
               const SizedBox(height: 8),
               _InputField(
@@ -970,10 +948,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                 prefixIcon: Icons.label_outline_rounded,
                 textCapitalization: TextCapitalization.words,
               ),
-
               const SizedBox(height: 20),
-
-              // Unit
               const _FieldLabel(label: 'Unit'),
               const SizedBox(height: 8),
               _InputField(
@@ -988,10 +963,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                   style: AppTextStyles.bodySm.copyWith(color: Colors.grey[500]),
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Category
               const _FieldLabel(label: 'Category'),
               const SizedBox(height: 8),
               Container(
@@ -1030,10 +1002,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 32),
-
-              // Action buttons
               Row(
                 children: [
                   Expanded(
@@ -1437,7 +1406,7 @@ class _EmptyState extends StatelessWidget {
           Container(
             width: 72,
             height: 72,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.orangeSurface,
               shape: BoxShape.circle,
             ),
