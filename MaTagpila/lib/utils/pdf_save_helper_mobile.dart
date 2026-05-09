@@ -32,7 +32,7 @@ class PdfSaveHelper {
       }
     }
 
-    final file = File('${dir!.path}/$filename');
+    final file = File('${dir.path}/$filename');
     await file.writeAsBytes(bytes);
     return file.path;
   }

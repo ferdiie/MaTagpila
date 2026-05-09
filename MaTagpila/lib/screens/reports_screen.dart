@@ -159,7 +159,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (!mounted) return;
 
       final pdf = pw.Document();
-      final now = DateTime.now();
 
       // ── Summary numbers ──
       final totalRevenue =
