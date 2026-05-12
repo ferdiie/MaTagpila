@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/price_item_model.dart';
 import '../../transactions/models/transaction_model.dart';
+import '../models/app_user.dart';
 
 part 'firestore_services.g.dart';
 
@@ -22,6 +23,46 @@ FirebaseFirestore firebaseFirestore(Ref ref) => FirebaseFirestore.instance;
 @riverpod
 Stream<User?> authStateChanges(Ref ref) {
   return ref.watch(firebaseAuthProvider).authStateChanges();
+}
+
+/// Firestore `users/{uid}` for the signed-in account (role, storeId, storeName).
+@riverpod
+Stream<Map<String, dynamic>?> currentUserProfileData(Ref ref) {
+  final auth = ref.watch(firebaseAuthProvider);
+  return auth.authStateChanges().asyncExpand((u) {
+    if (u == null) return Stream<Map<String, dynamic>?>.value(null);
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(u.uid)
+        .snapshots()
+        .map((s) => s.data());
+  });
+}
+
+/// Owner uid this session operates under (admin: own uid; cashier: owner uid).
+@riverpod
+String effectiveStoreId(Ref ref) {
+  final u = ref.watch(firebaseAuthProvider).currentUser;
+  if (u == null) return '';
+  final async = ref.watch(currentUserProfileDataProvider);
+  return async.maybeWhen(
+    data: (d) {
+      final sid = d?['storeId'] as String?;
+      if (sid != null && sid.isNotEmpty) return sid;
+      return u.uid;
+    },
+    orElse: () => u.uid,
+  );
+}
+
+/// True when profile says store owner (not a cashier attendant).
+@riverpod
+bool isStoreAdmin(Ref ref) {
+  final async = ref.watch(currentUserProfileDataProvider);
+  return async.maybeWhen(
+    data: (d) => (d?['role'] as String?) != 'cashier',
+    orElse: () => true,
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -81,6 +122,18 @@ class PricesService {
         .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
   }
 
+  /// Catalog for one store (owner uid). Requires `storeId` on documents.
+  Stream<List<PriceItem>> watchStore(String storeId) {
+    if (storeId.isEmpty) {
+      return Stream.value(const <PriceItem>[]);
+    }
+    return _col
+        .where('storeId', isEqualTo: storeId)
+        .orderBy('updatedAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map(PriceItem.fromSnapshot).toList());
+  }
+
   Stream<List<PriceItem>> watchMine(String userId) {
     return _col
         .where('addedBy', isEqualTo: userId)
@@ -100,6 +153,21 @@ class PricesService {
     return snap.docs.map(PriceItem.fromSnapshot).toList();
   }
 
+  Future<List<PriceItem>> searchByNameForStore({
+    required String storeId,
+    required String query,
+  }) async {
+    if (storeId.isEmpty || query.trim().isEmpty) return [];
+    final q = query.trim().toLowerCase();
+    final snap = await _col
+        .where('storeId', isEqualTo: storeId)
+        .where('nameLower', isGreaterThanOrEqualTo: q)
+        .where('nameLower', isLessThanOrEqualTo: '$q\uf8ff')
+        .limit(50)
+        .get();
+    return snap.docs.map(PriceItem.fromSnapshot).toList();
+  }
+
   Future<void> addItem({
     required String name,
     required double price,
@@ -107,6 +175,7 @@ class PricesService {
     required String category,
     required String store,
     required String addedBy,
+    required String storeId,
     String? barcode,
     String? imageUrl,
   }) async {
@@ -118,6 +187,7 @@ class PricesService {
       'unit': unit,
       'category': category,
       'store': store,
+      'storeId': storeId,
       'barcode': barcode,
       'imageUrl': imageUrl,
       'addedBy': addedBy,
@@ -165,11 +235,15 @@ class PricesService {
     await _firestore.collection('prices').doc(docId).delete();
   }
 
-  /// Returns every product document, sorted by name.
+  /// Returns every product document for a store, sorted by name.
   /// Used by the Full Price List and Products by Category reports.
-  Future<List<PriceItem>> getAllPrices() async {
-    final snapshot =
-        await _firestore.collection('prices').orderBy('name_lowercase').get();
+  Future<List<PriceItem>> getPricesForStore(String storeId) async {
+    if (storeId.isEmpty) return [];
+    final snapshot = await _firestore
+        .collection('prices')
+        .where('storeId', isEqualTo: storeId)
+        .orderBy('nameLower')
+        .get();
 
     return snapshot.docs.map((doc) => PriceItem.fromSnapshot(doc)).toList();
   }
@@ -183,6 +257,14 @@ PricesService pricesService(Ref ref) {
 @riverpod
 Stream<List<PriceItem>> allPricesStream(Ref ref) {
   return ref.watch(pricesServiceProvider).watchAll();
+}
+
+/// POS, price checker, and dashboard use this — scoped to the owner store.
+@riverpod
+Stream<List<PriceItem>> storePricesStream(Ref ref) {
+  final storeId = ref.watch(effectiveStoreIdProvider);
+  if (storeId.isEmpty) return const Stream.empty();
+  return ref.watch(pricesServiceProvider).watchStore(storeId);
 }
 
 @riverpod
@@ -201,9 +283,12 @@ class TransactionsService {
 
   CollectionReference get _col => _firestore.collection('transactions');
 
-  Stream<List<TransactionModel>> watchUserTransactions(String userId) {
+  Stream<List<TransactionModel>> watchStoreTransactions(String storeId) {
+    if (storeId.isEmpty) {
+      return Stream.value(const <TransactionModel>[]);
+    }
     return _col
-        .where('sellerId', isEqualTo: userId)
+        .where('sellerId', isEqualTo: storeId)
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((s) => s.docs.map(TransactionModel.fromSnapshot).toList());
@@ -215,8 +300,10 @@ class TransactionsService {
     required double total,
     required double tendered,
     required double change,
+    String? cashierUid,
+    String? cashierEmail,
   }) async {
-    await _col.add({
+    final payload = <String, dynamic>{
       'sellerId': sellerId,
       'items': items,
       'totalAmount': total,
@@ -224,13 +311,17 @@ class TransactionsService {
       'change': change,
       'timestamp': FieldValue.serverTimestamp(),
       'createdAt': FieldValue.serverTimestamp(),
-    });
+    };
+    if (cashierUid != null) payload['cashierUid'] = cashierUid;
+    if (cashierEmail != null) payload['cashierEmail'] = cashierEmail;
+    await _col.add(payload);
   }
 
   /// Returns all transactions between [from] (inclusive) and [to] (inclusive),
   /// ordered by createdAt ascending.
   /// Used by the Transaction Report.
   Future<List<TransactionModel>> getTransactionsByRange({
+    required String sellerId,
     required DateTime from,
     required DateTime to,
   }) async {
@@ -239,6 +330,7 @@ class TransactionsService {
 
     final snapshot = await _firestore
         .collection('transactions')
+        .where('sellerId', isEqualTo: sellerId)
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(from))
         .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(toEndOfDay))
         .orderBy('createdAt', descending: false)
@@ -259,44 +351,94 @@ TransactionsService transactionsService(Ref ref) {
 
 @riverpod
 Stream<List<TransactionModel>> userTransactionsStream(Ref ref) {
-  final user = ref.watch(authStateChangesProvider).value;
-  if (user == null) return const Stream.empty();
-  return ref.watch(transactionsServiceProvider).watchUserTransactions(user.uid);
+  final storeId = ref.watch(effectiveStoreIdProvider);
+  if (storeId.isEmpty) return const Stream.empty();
+  return ref.watch(transactionsServiceProvider).watchStoreTransactions(storeId);
 }
 
 // ─────────────────────────────────────────────
-//  MOST SEARCHED ITEM
+//  STORE-SCOPED SEARCH STATS  (stores/{storeId}/searches/{docId})
+//  Only counts queries that match at least one product in [catalogForMatch].
 // ─────────────────────────────────────────────
 
-Future<void> trackSearch(String query) async {
-  final q = query.trim().toLowerCase();
-  if (q.isEmpty) return;
+bool storeCatalogContainsQuery(String rawQuery, List<PriceItem> catalog) {
+  final q = rawQuery.trim().toLowerCase();
+  if (q.isEmpty || catalog.isEmpty) return false;
+  for (final p in catalog) {
+    if (p.nameLower.contains(q) || p.name.toLowerCase().contains(q)) {
+      return true;
+    }
+  }
+  return false;
+}
 
-  final ref = FirebaseFirestore.instance.collection('searches').doc(q);
+String _storeSearchDocId(String normalizedQuery) {
+  var id = normalizedQuery.trim().toLowerCase().replaceAll('/', '_');
+  if (id.isEmpty) return '_';
+  if (id.length > 800) id = id.substring(0, 800);
+  return id;
+}
 
-  await ref.set(
-    {'query': q, 'count': FieldValue.increment(1)},
-    SetOptions(merge: true), // creates doc if not exists
+/// Increments search stats for this store only when [rawQuery] matches the
+/// given catalog slice (e.g. full store list or non-empty search hits).
+Future<void> trackStoreSearch(
+  String rawQuery,
+  String storeId,
+  List<PriceItem> catalogForMatch,
+) async {
+  final q = rawQuery.trim().toLowerCase();
+  if (q.isEmpty || storeId.isEmpty) return;
+  if (!storeCatalogContainsQuery(q, catalogForMatch)) return;
+
+  final docRef = FirebaseFirestore.instance
+      .collection('stores')
+      .doc(storeId)
+      .collection('searches')
+      .doc(_storeSearchDocId(q));
+
+  await docRef.set(
+    {
+      'query': q,
+      'storeId': storeId,
+      'count': FieldValue.increment(1),
+      'updatedAt': FieldValue.serverTimestamp(),
+    },
+    SetOptions(merge: true),
   );
 }
 
-Future<String> getMostSearchedItem() async {
+/// Top search term for this store that still matches at least one catalog item.
+Future<String> fetchMostSearchedForStore(
+  String storeId,
+  List<PriceItem> catalog,
+) async {
+  if (storeId.isEmpty) return '-';
+  if (catalog.isEmpty) return 'Add products first';
+
   try {
     final snapshot = await FirebaseFirestore.instance
+        .collection('stores')
+        .doc(storeId)
         .collection('searches')
         .orderBy('count', descending: true)
-        .limit(1)
+        .limit(40)
         .get();
 
     if (snapshot.docs.isEmpty) {
-      return 'No searches yet'; // Return a placeholder string, not null
+      return 'No searches yet';
     }
 
-    // Ensure we access the correct field name ('query')
-    return snapshot.docs.first.data()['query'] as String? ?? 'None';
+    for (final doc in snapshot.docs) {
+      final term = (doc.data()['query'] as String?)?.trim().toLowerCase() ?? '';
+      if (term.isEmpty) continue;
+      if (storeCatalogContainsQuery(term, catalog)) {
+        return term;
+      }
+    }
+    return 'No trending matches yet';
   } catch (e) {
     debugPrint('Error fetching most searched: $e');
-    return '-'; // Fallback string on error
+    return '-';
   }
 }
 
@@ -309,4 +451,17 @@ Future<String> userStoreName(Ref ref) async {
       await FirebaseFirestore.instance.collection('users').doc(uid).get();
 
   return doc.data()?['storeName'] ?? 'Your Store';
+}
+
+@riverpod
+Stream<AppUser?> appUser(Ref ref) {
+  return ref.watch(currentUserProfileDataProvider).when(
+        data: (data) {
+          if (data == null) return Stream.value(null);
+          final uid = ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
+          return Stream.value(AppUser.fromMap({...data, 'uid': uid}));
+        },
+        loading: () => Stream.value(null),
+        error: (_, __) => Stream.value(null),
+      );
 }

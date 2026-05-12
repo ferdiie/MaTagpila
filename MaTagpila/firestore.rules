@@ -6,27 +6,107 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── prices collection ─────────────────────────────────────────────────
-    // Anyone logged in can read all prices (community price checker)
-    // Only the person who added an entry can update/delete it
-    match /prices/{docId} {
-      allow read: if request.auth != null;
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
 
-      allow create: if request.auth != null
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function effectiveStoreId() {
+      let u = userData();
+      return ('storeId' in u) && u.storeId is string && u.storeId.size() > 0
+        ? u.storeId
+        : request.auth.uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && (!('role' in userData()) || userData().role == 'admin');
+    }
+
+    function priceInMyStore() {
+      return ('storeId' in resource.data)
+        ? resource.data.storeId == effectiveStoreId()
+        : resource.data.addedBy == request.auth.token.email;
+    }
+
+    function priceCreateInMyStore() {
+      return request.resource.data.storeId == effectiveStoreId();
+    }
+
+    // ── users ───────────────────────────────────────────────────────────
+    match /users/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+
+      // Self sign-up / profile (existing app behavior)
+      allow create: if signedIn()
+        && request.auth.uid == userId
+        && (!('role' in request.resource.data)
+            || request.resource.data.role == 'admin');
+
+      allow update: if signedIn() && request.auth.uid == userId;
+
+      // Owner creates cashier profile at users/{cashierUid}
+      allow create: if signedIn()
+        && isAdmin()
+        && request.auth.uid == request.resource.data.storeId
+        && request.resource.data.role == 'cashier'
+        && request.resource.data.uid == userId;
+
+      match /cashiers/{cashierId} {
+        allow read, create, delete: if signedIn()
+          && request.auth.uid == userId
+          && isAdmin();
+        allow update: if signedIn()
+          && request.auth.uid == userId
+          && isAdmin();
+      }
+    }
+
+    // ── prices ──────────────────────────────────────────────────────────
+    match /prices/{docId} {
+      allow read: if signedIn() && priceInMyStore();
+
+      allow create: if signedIn()
+        && isAdmin()
+        && priceCreateInMyStore()
         && request.resource.data.addedBy == request.auth.token.email
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.price is number
         && request.resource.data.price > 0;
 
-      allow update: if request.auth != null
-        && resource.data.addedBy == request.auth.token.email;
-
-      allow delete: if request.auth != null
-        && resource.data.addedBy == request.auth.token.email;
+      allow update, delete: if signedIn()
+        && isAdmin()
+        && priceInMyStore();
     }
 
-    // ── Block everything else ─────────────────────────────────────────────
+    // ── transactions ────────────────────────────────────────────────────
+    match /transactions/{txId} {
+      allow read: if signedIn()
+        && resource.data.sellerId == effectiveStoreId();
+
+      allow create: if signedIn()
+        && request.resource.data.sellerId == effectiveStoreId()
+        && request.resource.data.items is list
+        && request.resource.data.totalAmount is number;
+    }
+
+    // ── per-store search aggregates (dashboard “most searched”) ───────────
+    match /stores/{storeId}/searches/{docId} {
+      allow read: if signedIn() && effectiveStoreId() == storeId;
+
+      allow create: if signedIn()
+        && effectiveStoreId() == storeId
+        && request.resource.data.storeId == storeId
+        && request.resource.data.query is string
+        && request.resource.data.query.size() > 0;
+
+      allow update: if signedIn() && effectiveStoreId() == storeId;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

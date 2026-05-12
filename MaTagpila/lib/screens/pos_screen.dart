@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/theme/app_theme.dart';
 import '../features/shared/models/price_item_model.dart';
@@ -95,12 +94,16 @@ class _PosScreenState extends ConsumerState<PosScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final storeId = ref.read(effectiveStoreIdProvider);
+      final isCashier = ref.read(isStoreAdminProvider) == false;
       await ref.read(transactionsServiceProvider).saveTransaction(
-            sellerId: FirebaseAuth.instance.currentUser!.uid,
+            sellerId: storeId.isNotEmpty ? storeId : user.uid,
             items: lineItems,
             total: total,
             tendered: freshTendered,
             change: freshChange,
+            cashierUid: isCashier ? user.uid : null,
+            cashierEmail: isCashier ? user.email : null,
           );
 
       _clearSale();
@@ -201,7 +204,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final pricesAsync = ref.watch(allPricesStreamProvider);
+    final pricesAsync = ref.watch(storePricesStreamProvider);
     final query = ref.watch(_posSearchProvider).trim().toLowerCase();
     final currency = NumberFormat.currency(symbol: '₱ ');
 
@@ -213,7 +216,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textMuted),
+            const Icon(Icons.wifi_off_rounded, size: 48, color: AppColors.textMuted),
             const SizedBox(height: 12),
             Text('Failed to load items',
                 style: AppTextStyles.headingSm
@@ -284,7 +287,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 7),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.white,
                         border: Border(
                           bottom: BorderSide(color: AppColors.borderLight),
@@ -508,7 +511,7 @@ class _CatalogList extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.search_off_rounded,
+            const Icon(Icons.search_off_rounded,
                 size: 40, color: AppColors.textMuted),
             const SizedBox(height: 8),
             Text('No matching items',
@@ -725,7 +728,7 @@ class _CartPanel extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.shopping_cart_outlined,
+                          const Icon(Icons.shopping_cart_outlined,
                               size: 32, color: AppColors.textMuted),
                           const SizedBox(height: 5),
                           Text('Cart is empty',

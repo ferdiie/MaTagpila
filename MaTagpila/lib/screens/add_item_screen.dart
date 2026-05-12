@@ -61,6 +61,11 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
 
     setState(() => _saving = true);
     try {
+      final storeId = ref.read(effectiveStoreIdProvider);
+      if (storeId.isEmpty) {
+        _showSnack('Could not resolve store. Try signing in again.', isError: true);
+        return;
+      }
       await ref.read(pricesServiceProvider).addItem(
             name: _nameCtrl.text.trim(),
             price: double.parse(_priceCtrl.text.trim()),
@@ -68,6 +73,7 @@ class _AddItemScreenState extends ConsumerState<AddItemScreen> {
             category: _selectedCategory,
             store: _storeCtrl.text.trim(),
             addedBy: auth.currentUserEmail,
+            storeId: storeId,
             barcode: _barcodeCtrl.text.trim().isNotEmpty
                 ? _barcodeCtrl.text.trim()
                 : null,
@@ -386,7 +392,7 @@ class _DropdownField<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<T>(
-      value: value,
+      initialValue: value,
       decoration: InputDecoration(
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 14),

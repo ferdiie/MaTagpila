@@ -8,6 +8,7 @@ import '../core/theme/app_theme.dart';
 import '../features/shared/services/firestore_services.dart';
 import 'about_screen.dart';
 import 'help_support_screen.dart';
+import 'manage_cashiers_screen.dart';
 import 'reports_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -19,6 +20,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = FirebaseAuth.instance.currentUser;
     final email = user?.email ?? 'Unknown';
+    final isAdmin = ref.watch(isStoreAdminProvider);
 
     // ✅ Read the name from Firestore via the provider
     final storeNameAsync = ref.watch(userStoreNameProvider);
@@ -60,29 +62,37 @@ class ProfileScreen extends ConsumerWidget {
             onTap: () => context.pushNamed('transactions'),
           ),
 
-          // ── Reports tile ───────────────────────────
-          _ProfileMenuTile(
-            icon: Icons.bar_chart_rounded,
-            label: 'Reports',
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: AppColors.orangeSurface,
-                borderRadius: BorderRadius.circular(20),
+          if (isAdmin) ...[
+            _ProfileMenuTile(
+              icon: Icons.group_add_outlined,
+              label: 'Store attendants',
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ManageCashiersScreen()),
               ),
-              child: Text(
-                'PDF',
-                style: AppTextStyles.bodySm.copyWith(
-                  color: AppColors.orange,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 11,
+            ),
+            _ProfileMenuTile(
+              icon: Icons.bar_chart_rounded,
+              label: 'Reports',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.orangeSurface,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'PDF',
+                  style: AppTextStyles.bodySm.copyWith(
+                    color: AppColors.orange,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                  ),
                 ),
               ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const ReportsScreen()),
+              ),
             ),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ReportsScreen()),
-            ),
-          ),
+          ],
 
           const SizedBox(height: 24),
 
@@ -97,7 +107,7 @@ class ProfileScreen extends ConsumerWidget {
           ),
           _ProfileMenuTile(
             icon: Icons.info_outline_rounded,
-            label: 'About Ma.Tagpila',
+            label: 'About MaTAGPILA',
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const AboutScreen()),
             ),
@@ -129,7 +139,7 @@ class ProfileScreen extends ConsumerWidget {
 
           // ── Version footer ────────────────────────
           Text(
-            'Ma.Tagpila v$_appVersion',
+            'MaTAGPILA v$_appVersion',
             style: AppTextStyles.bodySm.copyWith(color: Colors.grey[400]),
           ),
           const SizedBox(height: 4),

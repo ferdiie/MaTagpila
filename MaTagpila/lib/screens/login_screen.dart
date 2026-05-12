@@ -131,6 +131,17 @@ class _AuthScreenState extends State<AuthScreen>
         storeName: 'My Store',
         role: 'admin',
       );
+    } else {
+      final data = doc.data();
+      final role = data?['role'] as String? ?? 'admin';
+      final needsStoreId = (data?['storeId'] as String?) == null ||
+          (data?['storeId'] as String?)!.isEmpty;
+      if (needsStoreId && role != 'cashier') {
+        await docRef.set(
+          {'storeId': user.uid},
+          SetOptions(merge: true),
+        );
+      }
     }
   }
 
@@ -147,6 +158,7 @@ class _AuthScreenState extends State<AuthScreen>
       'name': name,
       'storeName': storeName,
       'role': role,
+      'storeId': user.uid,
       'email': user.email,
       'createdAt': FieldValue.serverTimestamp(),
     });
@@ -219,7 +231,7 @@ class _AuthScreenState extends State<AuthScreen>
                   _Logo(),
                   const SizedBox(height: 18),
                   const Text(
-                    'Ma.Tagpila',
+                    'MaTAGPILA',
                     style: TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w800,
@@ -229,7 +241,7 @@ class _AuthScreenState extends State<AuthScreen>
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'Find the best prices near you',
+                    'Tagpila? Ask MaTAGPILA!',
                     style: TextStyle(fontSize: 13, color: AppColors.textGrey),
                   ),
                   const SizedBox(height: 36),
@@ -258,41 +270,45 @@ class _AuthScreenState extends State<AuthScreen>
                           ),
                           AnimatedBuilder(
                             animation: _tab,
-                            builder: (context, child) => IndexedStack(
-                              index: _tab.index,
-                              children: [
-                                _LoginForm(
-                                  formKey: _loginFormKey,
-                                  emailCtrl: _loginEmail,
-                                  passCtrl: _loginPass,
-                                  passVisible: _loginPassShow,
-                                  onTogglePass: () => setState(
-                                      () => _loginPassShow = !_loginPassShow),
-                                  onSubmit: _login,
-                                  onForgot: _forgotPassword,
-                                  loading: _loading,
-                                  emailValidator: _validateEmail,
-                                  passValidator: _validatePassword,
-                                ),
-                                _SignupForm(
-                                  formKey: _signupFormKey,
-                                  emailCtrl: _signEmail,
-                                  passCtrl: _signPass,
-                                  confirmCtrl: _signConfirm,
-                                  nameCtrl: _signName,
-                                  storeNameCtrl: _signStoreName,
-                                  passVisible: _signPassShow,
-                                  confirmVisible: _signConfirmShow,
-                                  onTogglePass: () => setState(
-                                      () => _signPassShow = !_signPassShow),
-                                  onToggleConfirm: () => setState(() =>
-                                      _signConfirmShow = !_signConfirmShow),
-                                  onSubmit: _register,
-                                  loading: _loading,
-                                  emailValidator: _validateEmail,
-                                  passValidator: _validatePassword,
-                                ),
-                              ],
+                            builder: (context, child) => AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                      opacity: animation, child: child),
+                              child: _tab.index == 0
+                                  ? _LoginForm(
+                                      key: const ValueKey('login'),
+                                      formKey: _loginFormKey,
+                                      emailCtrl: _loginEmail,
+                                      passCtrl: _loginPass,
+                                      passVisible: _loginPassShow,
+                                      onTogglePass: () => setState(() =>
+                                          _loginPassShow = !_loginPassShow),
+                                      onSubmit: _login,
+                                      onForgot: _forgotPassword,
+                                      loading: _loading,
+                                      emailValidator: _validateEmail,
+                                      passValidator: _validatePassword,
+                                    )
+                                  : _SignupForm(
+                                      key: const ValueKey('signup'),
+                                      formKey: _signupFormKey,
+                                      emailCtrl: _signEmail,
+                                      passCtrl: _signPass,
+                                      confirmCtrl: _signConfirm,
+                                      nameCtrl: _signName,
+                                      storeNameCtrl: _signStoreName,
+                                      passVisible: _signPassShow,
+                                      confirmVisible: _signConfirmShow,
+                                      onTogglePass: () => setState(
+                                          () => _signPassShow = !_signPassShow),
+                                      onToggleConfirm: () => setState(() =>
+                                          _signConfirmShow = !_signConfirmShow),
+                                      onSubmit: _register,
+                                      loading: _loading,
+                                      emailValidator: _validateEmail,
+                                      passValidator: _validatePassword,
+                                    ),
                             ),
                           ),
                           if (_error != null)
@@ -569,6 +585,7 @@ class _LoginForm extends StatelessWidget {
   final String? Function(String?) emailValidator, passValidator;
 
   const _LoginForm({
+    super.key,
     required this.formKey,
     required this.emailCtrl,
     required this.passCtrl,
@@ -652,6 +669,7 @@ class _SignupForm extends StatelessWidget {
   final String? Function(String?) emailValidator, passValidator;
 
   const _SignupForm({
+    super.key,
     required this.formKey,
     required this.emailCtrl,
     required this.passCtrl,

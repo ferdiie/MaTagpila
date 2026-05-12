@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'firebase_options.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'core/services/cashier_account_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/router_provider.dart';
 
@@ -28,6 +29,7 @@ Future<void> main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await CashierAccountService.ensureSecondaryApp();
 
   runApp(
     const ProviderScope(

@@ -58,7 +58,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _generatePriceList() async {
     _setLoading('price_list', true);
     try {
-      final items = await ref.read(pricesServiceProvider).getAllPrices();
+      final storeId = ref.read(effectiveStoreIdProvider);
+      final items =
+          await ref.read(pricesServiceProvider).getPricesForStore(storeId);
       if (!mounted) return;
 
       final pdf = pw.Document();
@@ -151,8 +153,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _generateTransactionReport() async {
     _setLoading('transactions', true);
     try {
+      final storeId = ref.read(effectiveStoreIdProvider);
       final txList =
           await ref.read(transactionsServiceProvider).getTransactionsByRange(
+                sellerId: storeId,
                 from: _txRange.start,
                 to: _txRange.end,
               );
@@ -392,7 +396,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _generateByCategory() async {
     _setLoading('by_category', true);
     try {
-      final items = await ref.read(pricesServiceProvider).getAllPrices();
+      final storeId = ref.read(effectiveStoreIdProvider);
+      final items =
+          await ref.read(pricesServiceProvider).getPricesForStore(storeId);
       if (!mounted) return;
 
       final Map<String, List<PriceItem>> grouped = {};

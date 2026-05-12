@@ -57,6 +57,65 @@ final authStateChangesProvider = AutoDisposeStreamProvider<User?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AuthStateChangesRef = AutoDisposeStreamProviderRef<User?>;
+String _$currentUserProfileDataHash() =>
+    r'e32702509bdaecc3a8b7d7ff447357501686139c';
+
+/// Firestore `users/{uid}` for the signed-in account (role, storeId, storeName).
+///
+/// Copied from [currentUserProfileData].
+@ProviderFor(currentUserProfileData)
+final currentUserProfileDataProvider =
+    AutoDisposeStreamProvider<Map<String, dynamic>?>.internal(
+  currentUserProfileData,
+  name: r'currentUserProfileDataProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$currentUserProfileDataHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef CurrentUserProfileDataRef
+    = AutoDisposeStreamProviderRef<Map<String, dynamic>?>;
+String _$effectiveStoreIdHash() => r'bd37c7dffb05a5687ce90a4da820646d6aecd2fc';
+
+/// Owner uid this session operates under (admin: own uid; cashier: owner uid).
+///
+/// Copied from [effectiveStoreId].
+@ProviderFor(effectiveStoreId)
+final effectiveStoreIdProvider = AutoDisposeProvider<String>.internal(
+  effectiveStoreId,
+  name: r'effectiveStoreIdProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$effectiveStoreIdHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef EffectiveStoreIdRef = AutoDisposeProviderRef<String>;
+String _$isStoreAdminHash() => r'71f09a2e5031a8186352025c5caaefb07028c725';
+
+/// True when profile says store owner (not a cashier attendant).
+///
+/// Copied from [isStoreAdmin].
+@ProviderFor(isStoreAdmin)
+final isStoreAdminProvider = AutoDisposeProvider<bool>.internal(
+  isStoreAdmin,
+  name: r'isStoreAdminProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$isStoreAdminHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef IsStoreAdminRef = AutoDisposeProviderRef<bool>;
 String _$authServiceHash() => r'ac0fb87c9db72a1b3f29aaf90428ac20b82a7b4e';
 
 /// See also [authService].
@@ -108,6 +167,26 @@ final allPricesStreamProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AllPricesStreamRef = AutoDisposeStreamProviderRef<List<PriceItem>>;
+String _$storePricesStreamHash() => r'bf2fc0cce44f190bc43ac353a771331ab26f04c3';
+
+/// POS, price checker, and dashboard use this — scoped to the owner store.
+///
+/// Copied from [storePricesStream].
+@ProviderFor(storePricesStream)
+final storePricesStreamProvider =
+    AutoDisposeStreamProvider<List<PriceItem>>.internal(
+  storePricesStream,
+  name: r'storePricesStreamProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$storePricesStreamHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef StorePricesStreamRef = AutoDisposeStreamProviderRef<List<PriceItem>>;
 String _$myPricesStreamHash() => r'2bfd8285a3a22c9b7078acaeb2708c2544cbbe9b';
 
 /// See also [myPricesStream].
@@ -146,7 +225,7 @@ final transactionsServiceProvider =
 // ignore: unused_element
 typedef TransactionsServiceRef = AutoDisposeProviderRef<TransactionsService>;
 String _$userTransactionsStreamHash() =>
-    r'09b06faac8eaac6862e306c324b885ea2671a22c';
+    r'7a0b8163e7aa99b90f7f20befc3a1282d396b569';
 
 /// See also [userTransactionsStream].
 @ProviderFor(userTransactionsStream)
@@ -182,5 +261,21 @@ final userStoreNameProvider = AutoDisposeFutureProvider<String>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UserStoreNameRef = AutoDisposeFutureProviderRef<String>;
+String _$appUserHash() => r'8f24de3b0535b3d7984ce42db5a66b1b1d0f3d99';
+
+/// See also [appUser].
+@ProviderFor(appUser)
+final appUserProvider = AutoDisposeStreamProvider<AppUser?>.internal(
+  appUser,
+  name: r'appUserProvider',
+  debugGetCreateSourceHash:
+      const bool.fromEnvironment('dart.vm.product') ? null : _$appUserHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef AppUserRef = AutoDisposeStreamProviderRef<AppUser?>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

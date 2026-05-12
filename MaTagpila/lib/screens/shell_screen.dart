@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/shared/services/firestore_services.dart';
 import 'add_item_screen.dart';
 import 'dashboard_screen.dart';
 import 'price_check_screen.dart';
@@ -24,7 +25,10 @@ class _NavItem {
   });
 }
 
-const _navItems = [
+// ─────────────────────────────────────────────
+//  SIDEBAR NAV ITEMS  (unchanged — Price Check stays at index 2)
+// ─────────────────────────────────────────────
+const _ownerNavItems = [
   _NavItem(
     label: 'Home',
     icon: Icons.home_outlined,
@@ -52,6 +56,84 @@ const _navItems = [
   ),
 ];
 
+const _cashierNavItems = [
+  _NavItem(
+    label: 'Home',
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+  ),
+  _NavItem(
+    label: 'POS',
+    icon: Icons.point_of_sale_outlined,
+    activeIcon: Icons.point_of_sale_rounded,
+  ),
+  _NavItem(
+    label: 'Price Checker',
+    icon: Icons.search_rounded,
+    activeIcon: Icons.search_rounded,
+  ),
+  _NavItem(
+    label: 'Profile',
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+  ),
+];
+
+// ─────────────────────────────────────────────
+//  MOBILE PILL ITEMS  (Price Checker excluded — it's the detached FAB)
+// ─────────────────────────────────────────────
+const _ownerPillItems = [
+  _NavItem(
+    label: 'Home',
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+  ),
+  _NavItem(
+    label: 'POS',
+    icon: Icons.point_of_sale_outlined,
+    activeIcon: Icons.point_of_sale_rounded,
+  ),
+  _NavItem(
+    label: 'Add Item',
+    icon: Icons.add_circle_outline_rounded,
+    activeIcon: Icons.add_circle_rounded,
+  ),
+  _NavItem(
+    label: 'Profile',
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+  ),
+];
+
+const _cashierPillItems = [
+  _NavItem(
+    label: 'Home',
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home_rounded,
+  ),
+  _NavItem(
+    label: 'POS',
+    icon: Icons.point_of_sale_outlined,
+    activeIcon: Icons.point_of_sale_rounded,
+  ),
+  _NavItem(
+    label: 'Profile',
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+  ),
+];
+
+// Screen order (shared by both sidebar and mobile IndexedStack):
+//   Owner:   Home=0  POS=1  PriceCheck=2  AddItem=3  Profile=4
+//   Cashier: Home=0  POS=1  PriceCheck=2  Profile=3
+//
+// Mobile pill taps map to screen indices (skipping PriceCheck=2):
+//   Owner pill:   Home→0  POS→1  AddItem→3  Profile→4
+//   Cashier pill: Home→0  POS→1  Profile→3
+const _ownerPillToScreen = [0, 1, 3, 4];
+const _cashierPillToScreen = [0, 1, 3];
+const _priceCheckerScreenIndex = 2; // same for both roles
+
 // ─────────────────────────────────────────────
 //  BREAKPOINTS
 // ─────────────────────────────────────────────
@@ -59,7 +141,7 @@ const double _mobileBreakpoint = 600;
 const double _tabletBreakpoint = 900;
 
 // ─────────────────────────────────────────────
-//  CURRENT TAB PROVIDER
+//  CURRENT TAB PROVIDER  (tracks screen index)
 // ─────────────────────────────────────────────
 final _tabProvider = StateProvider<int>((_) => 0);
 
@@ -71,41 +153,77 @@ class ShellScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tab = ref.watch(_tabProvider);
+    final isAdmin = ref.watch(isStoreAdminProvider);
+    final sidebarNavItems = isAdmin ? _ownerNavItems : _cashierNavItems;
+    final pillItems = isAdmin ? _ownerPillItems : _cashierPillItems;
+    final pillToScreen = isAdmin ? _ownerPillToScreen : _cashierPillToScreen;
+    final totalScreens = isAdmin ? 5 : 4;
+
+    var tab = ref.watch(_tabProvider);
+    if (tab >= totalScreens) {
+      tab = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(_tabProvider.notifier).state = 0;
+      });
+    }
+
     final width = MediaQuery.of(context).size.width;
 
-    final screens = [
-      DashboardScreen(
-        onOpenPriceChecker: () => ref.read(_tabProvider.notifier).state = 2,
-      ),
-      const PosScreen(),
-      const PriceCheckScreen(),
-      const AddItemScreen(),
-      const ProfileScreen(),
-    ];
+    final dashboard = DashboardScreen(
+      onOpenPriceChecker: () =>
+          ref.read(_tabProvider.notifier).state = _priceCheckerScreenIndex,
+    );
+
+    // Owner:   [Home=0, POS=1, PriceCheck=2, AddItem=3, Profile=4]
+    // Cashier: [Home=0, POS=1, PriceCheck=2, Profile=3]
+    final screens = isAdmin
+        ? <Widget>[
+            dashboard,
+            const PosScreen(),
+            const PriceCheckScreen(),
+            const AddItemScreen(),
+            const ProfileScreen(),
+          ]
+        : <Widget>[
+            dashboard,
+            const PosScreen(),
+            const PriceCheckScreen(),
+            const ProfileScreen(),
+          ];
 
     if (width >= _mobileBreakpoint) {
-      // Tablet & Desktop — sidebar layout
-      return _SidebarLayout(tab: tab, ref: ref, screens: screens);
-    } else {
-      // Mobile — pill bottom nav
-      return _MobileLayout(tab: tab, ref: ref, screens: screens);
+      return _SidebarLayout(
+        tab: tab,
+        ref: ref,
+        screens: screens,
+        navItems: sidebarNavItems, // sidebar is UNCHANGED
+      );
     }
+
+    return _MobileLayout(
+      tab: tab,
+      ref: ref,
+      screens: screens,
+      pillItems: pillItems,
+      pillToScreen: pillToScreen,
+    );
   }
 }
 
 // ─────────────────────────────────────────────
-//  SIDEBAR LAYOUT  (tablet / desktop)
+//  SIDEBAR LAYOUT  (tablet / desktop) — UNCHANGED
 // ─────────────────────────────────────────────
 class _SidebarLayout extends StatelessWidget {
   final int tab;
   final WidgetRef ref;
   final List<Widget> screens;
+  final List<_NavItem> navItems;
 
   const _SidebarLayout({
     required this.tab,
     required this.ref,
     required this.screens,
+    required this.navItems,
   });
 
   @override
@@ -177,10 +295,10 @@ class _SidebarLayout extends StatelessWidget {
                     Expanded(
                       child: ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        itemCount: _navItems.length,
+                        itemCount: navItems.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 4),
                         itemBuilder: (_, i) => _SidebarNavItem(
-                          item: _navItems[i],
+                          item: navItems[i],
                           isActive: tab == i,
                           isExpanded: isWide,
                           onTap: () =>
@@ -271,17 +389,21 @@ class _SidebarNavItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-//  MOBILE LAYOUT  (pill bottom nav)
+//  MOBILE LAYOUT  (pill + detached FAB)
 // ─────────────────────────────────────────────
 class _MobileLayout extends StatelessWidget {
   final int tab;
   final WidgetRef ref;
   final List<Widget> screens;
+  final List<_NavItem> pillItems;
+  final List<int> pillToScreen;
 
   const _MobileLayout({
     required this.tab,
     required this.ref,
     required this.screens,
+    required this.pillItems,
+    required this.pillToScreen,
   });
 
   @override
@@ -296,19 +418,31 @@ class _MobileLayout extends StatelessWidget {
         ),
       ),
       bottomNavigationBar: _PillBottomNav(
-        currentTab: tab,
-        onTap: (i) => ref.read(_tabProvider.notifier).state = i,
+        pillItems: pillItems,
+        pillToScreen: pillToScreen,
+        currentScreenTab: tab,
+        onTap: (screenIndex) =>
+            ref.read(_tabProvider.notifier).state = screenIndex,
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────
+//  BOTTOM NAV — pill tabs + detached Price Checker FAB
+//  Owner:   [Home | POS | Add Item | Profile]  [Prices FAB]
+//  Cashier: [Home | POS | Profile]             [Prices FAB]
+// ─────────────────────────────────────────────
 class _PillBottomNav extends StatelessWidget {
-  final int currentTab;
+  final List<_NavItem> pillItems;
+  final List<int> pillToScreen;
+  final int currentScreenTab;
   final ValueChanged<int> onTap;
 
   const _PillBottomNav({
-    required this.currentTab,
+    required this.pillItems,
+    required this.pillToScreen,
+    required this.currentScreenTab,
     required this.onTap,
   });
 
@@ -317,154 +451,137 @@ class _PillBottomNav extends StatelessWidget {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Container(
-      color: AppColors.cream, // background behind pill
+      color: AppColors.cream,
       padding: EdgeInsets.only(
         left: 16,
-        right: 16,
+        right: 10,
         bottom: bottomPadding + 12,
         top: 8,
       ),
-      child: Container(
-        height: 64,
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(40), // pill shape
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(30),
-              blurRadius: 24,
-              spreadRadius: 0,
-              offset: const Offset(0, 8),
-            ),
-            BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 8,
-              spreadRadius: 0,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: List.generate(_navItems.length, (i) {
-            if (i == 2) {
-              // Center — Price Checker FAB-style
-              return Expanded(
-                child: _PillCenterItem(
-                  item: _navItems[i],
-                  isActive: currentTab == i,
-                  onTap: () => onTap(i),
-                ),
-              );
-            }
-            return Expanded(
-              child: _PillNavItem(
-                item: _navItems[i],
-                isActive: currentTab == i,
-                onTap: () => onTap(i),
-              ),
-            );
-          }),
-        ),
-      ),
-    );
-  }
-}
-
-class _PillNavItem extends StatelessWidget {
-  final _NavItem item;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _PillNavItem({
-    required this.item,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(40),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? AppColors.orange.withAlpha(25)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                isActive ? item.activeIcon : item.icon,
-                size: 20,
-                color: isActive ? AppColors.orange : AppColors.textMuted,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 9,
-                height: 1.1,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                color: isActive ? AppColors.orange : AppColors.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PillCenterItem extends StatelessWidget {
-  final _NavItem item;
-  final bool isActive;
-  final VoidCallback onTap;
-
-  const _PillCenterItem({
-    required this.item,
-    required this.isActive,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: AppColors.orange,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.orange.withAlpha(90),
-                  blurRadius: 16,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          // ── Pill ─────────────────────────────
+          Expanded(
+            child: Container(
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(40),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(30),
+                    blurRadius: 24,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withAlpha(10),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: List.generate(pillItems.length, (i) {
+                  final item = pillItems[i];
+                  final screenIndex = pillToScreen[i];
+                  final isActive = currentScreenTab == screenIndex;
+                  return Expanded(
+                    child: InkWell(
+                      onTap: () => onTap(screenIndex),
+                      borderRadius: BorderRadius.circular(40),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 6),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: isActive
+                                    ? AppColors.orange.withAlpha(25)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Icon(
+                                isActive ? item.activeIcon : item.icon,
+                                size: 20,
+                                color: isActive
+                                    ? AppColors.orange
+                                    : AppColors.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 9,
+                                height: 1.1,
+                                fontWeight: isActive
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                                color: isActive
+                                    ? AppColors.orange
+                                    : AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ),
             ),
-            child: const Icon(
-              Icons.search_rounded,
-              color: Colors.white,
-              size: 24,
+          ),
+
+          const SizedBox(width: 10),
+
+          // ── Detached Price Checker FAB ────────
+          GestureDetector(
+            onTap: () => onTap(_priceCheckerScreenIndex),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: AppColors.orange,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.orange.withAlpha(100),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.search_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Prices',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

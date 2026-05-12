@@ -125,6 +125,16 @@ class TransactionScreen extends ConsumerWidget {
   }
 }
 
+String _formatDateLabel(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final yesterday = today.subtract(const Duration(days: 1));
+  final date = DateTime(dt.year, dt.month, dt.day);
+  if (date == today) return 'Today';
+  if (date == yesterday) return 'Yesterday';
+  return DateFormat('MMM dd, yyyy').format(dt);
+}
+
 class _TransactionTile extends StatelessWidget {
   final TransactionModel transaction;
   final VoidCallback onTap;
@@ -162,7 +172,7 @@ class _TransactionTile extends StatelessWidget {
                     style: AppTextStyles.headingSm,
                   ),
                   Text(
-                    '${transaction.items.length} items bought',
+                    '${transaction.items.length} item${transaction.items.length == 1 ? '' : 's'} bought',
                     style: AppTextStyles.bodySm,
                   ),
                 ],
@@ -177,7 +187,7 @@ class _TransactionTile extends StatelessWidget {
                       AppTextStyles.headingSm.copyWith(color: AppColors.orange),
                 ),
                 Text(
-                  DateFormat.jm().format(transaction.timestamp),
+                  '${_formatDateLabel(transaction.timestamp)} • ${DateFormat.jm().format(transaction.timestamp)}',
                   style: AppTextStyles.bodySm,
                 ),
               ],

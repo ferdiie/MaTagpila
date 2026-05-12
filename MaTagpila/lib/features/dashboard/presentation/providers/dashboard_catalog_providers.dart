@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../shared/models/price_item_model.dart';
-import '../../data/dashboard_catalog_repository.dart';
+import '../../../shared/services/firestore_services.dart';
 
 const String allCategoryFilter = 'All';
 
@@ -9,9 +9,11 @@ final selectedDashboardCategoryProvider = StateProvider<String>(
   (ref) => allCategoryFilter,
 );
 
-final dashboardProductsProvider = StreamProvider<List<PriceItem>>(
-  (ref) => ref.watch(dashboardCatalogRepositoryProvider).watchProducts(),
-);
+final dashboardProductsProvider = StreamProvider<List<PriceItem>>((ref) {
+  final storeId = ref.watch(effectiveStoreIdProvider);
+  if (storeId.isEmpty) return const Stream.empty();
+  return ref.watch(pricesServiceProvider).watchStore(storeId);
+});
 
 final dashboardCategoriesProvider = Provider<AsyncValue<List<String>>>((ref) {
   final productsAsync = ref.watch(dashboardProductsProvider);
@@ -65,4 +67,12 @@ final dashboardFilteredProductsProvider =
     }).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   });
+});
+
+/// Highest search count for this store among terms that match the live catalog.
+final mostSearchedInStoreProvider = FutureProvider<String>((ref) async {
+  final storeId = ref.watch(effectiveStoreIdProvider);
+  if (storeId.isEmpty) return '-';
+  final items = await ref.watch(dashboardProductsProvider.future);
+  return fetchMostSearchedForStore(storeId, items);
 });

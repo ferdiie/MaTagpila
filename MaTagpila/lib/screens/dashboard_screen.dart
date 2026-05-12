@@ -193,31 +193,14 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
   final _searchController = TextEditingController();
   String _query = '';
 
-  late Future<String> _mostSearchedFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    // getMostSearchedItem reads from /users/{uid}/searches — user-scoped.
-    _mostSearchedFuture = getMostSearchedItem();
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   @override
   Widget build(BuildContext context) {
-    // userStoreNameProvider reads from /users/{uid} — user-scoped.
     final displayName = ref.watch(userStoreNameProvider).value ?? 'Your Store';
     final categoriesAsync = ref.watch(dashboardCategoriesProvider);
     final filteredProductsAsync =
@@ -232,15 +215,12 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
-        // ── Welcome Banner ────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: _WelcomeBanner(
-            greeting: _greeting(),
+            greeting: _dashboardGreeting(),
             displayName: displayName,
           ),
         ),
-
-        // ── Main content ──────────────────────────────────────────────────
         filteredProductsAsync.when(
           data: (filteredProducts) {
             final recentItems =
@@ -258,7 +238,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
 
             final allProducts = recentProductsAsync.valueOrNull ?? [];
 
-            // Today's sales — reads from /users/{uid}/transactions — user-scoped.
             final transactionsAsync = ref.watch(userTransactionsStreamProvider);
             final transactions =
                 transactionsAsync.valueOrNull ?? <TransactionModel>[];
@@ -272,8 +251,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
             return SliverList(
               delegate: SliverChildListDelegate([
                 const SizedBox(height: 4),
-
-                // ── Stat cards ─────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
@@ -283,34 +260,45 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           icon: Icons.inventory_2_outlined,
                           value: '${allProducts.length}',
                           label: 'Items',
-                          sublabel: 'in catalog',
+                          sublabel: 'this store',
                           color: AppColors.catBlue,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: FutureBuilder<String>(
-                          future: _mostSearchedFuture,
-                          builder: (context, snapshot) {
-                            final mostSearched = snapshot.data ?? '-';
-
-                            return GestureDetector(
-                              onTap: () {
-                                final q =
-                                    mostSearched == '-' ? '' : mostSearched;
-                                _searchController.text = q;
-                                setState(() => _query = q);
-                              },
-                              child: _StatCard(
+                        child: ref.watch(mostSearchedInStoreProvider).when(
+                              loading: () => const _StatCard(
                                 icon: Icons.search_rounded,
-                                value: mostSearched,
-                                label: 'Most Searched',
-                                sublabel: 'tap to search',
+                                value: '…',
+                                label: 'Most searched',
+                                sublabel: 'this store',
                                 color: AppColors.catGreen,
                               ),
-                            );
-                          },
-                        ),
+                              error: (_, __) => const _StatCard(
+                                icon: Icons.search_rounded,
+                                value: '-',
+                                label: 'Most searched',
+                                sublabel: 'this store',
+                                color: AppColors.catGreen,
+                              ),
+                              data: (mostSearched) => GestureDetector(
+                                onTap: () {
+                                  if (!_mostSearchedLabelIsFilterable(
+                                      mostSearched)) {
+                                    return;
+                                  }
+                                  _searchController.text = mostSearched;
+                                  setState(() => _query = mostSearched);
+                                },
+                                child: _StatCard(
+                                  icon: Icons.search_rounded,
+                                  value: mostSearched,
+                                  label: 'Most searched',
+                                  sublabel: 'this store',
+                                  color: AppColors.catGreen,
+                                ),
+                              ),
+                            ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -320,16 +308,14 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             symbol: '₱',
                             decimalDigits: 0,
                           ).format(todaySales),
-                          label: 'Total Sales',
-                          sublabel: 'today',
+                          label: 'Sales today',
+                          sublabel: 'this store',
                           color: AppColors.catOrange,
                         ),
                       ),
                     ],
                   ),
                 ),
-
-                // ── Search bar ─────────────────────────────────────────
                 const SizedBox(height: 16),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -348,13 +334,16 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     child: TextField(
                       controller: _searchController,
                       onChanged: (value) => setState(() => _query = value),
-                      onSubmitted: (value) {
-                        // trackSearch saves to /users/{uid}/searches — user-scoped.
-                        trackSearch(value);
+                      onSubmitted: (value) async {
+                        final sid = ref.read(effectiveStoreIdProvider);
+                        final items =
+                            await ref.read(dashboardProductsProvider.future);
+                        await trackStoreSearch(value, sid, items);
+                        ref.invalidate(mostSearchedInStoreProvider);
                         widget.onOpenPriceChecker();
                       },
                       decoration: InputDecoration(
-                        hintText: 'Search item to verify price…',
+                        hintText: 'Filter home list or jump to price checker…',
                         prefixIcon: const Icon(Icons.search_rounded,
                             color: AppColors.orange),
                         suffixIcon: _query.isEmpty
@@ -379,8 +368,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     ),
                   ),
                 ),
-
-                // ── Recent price changes ───────────────────────────────
                 const SizedBox(height: 22),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 12, 0),
@@ -388,15 +375,15 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     children: [
                       Text(
                         _query.isEmpty
-                            ? 'Recent Price Changes'
-                            : 'Search Results',
+                            ? 'Recent price changes'
+                            : 'Filtered items',
                         style: AppTextStyles.headingLg,
                       ),
                       const Spacer(),
                       TextButton.icon(
                         onPressed: widget.onOpenPriceChecker,
                         icon: const Icon(Icons.arrow_forward_rounded, size: 16),
-                        label: const Text('See all'),
+                        label: const Text('Price checker'),
                         style: TextButton.styleFrom(
                           foregroundColor: AppColors.orange,
                         ),
@@ -410,8 +397,11 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                   child: recentItems.isEmpty
                       ? Center(
                           child: Text(
-                            'No recent price entries yet.',
-                            style: AppTextStyles.bodyMd,
+                            'No items in this store yet. Add products under Add item.',
+                            textAlign: TextAlign.center,
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         )
                       : ListView.separated(
@@ -427,12 +417,10 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                           ),
                         ),
                 ),
-
-                // ── Browse by category ─────────────────────────────────
                 const SizedBox(height: 22),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                  child: Text('Browse by Category',
+                  child: Text('Browse by category',
                       style: AppTextStyles.headingLg),
                 ),
                 DashboardCategoryFilterBar(
@@ -443,8 +431,6 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                         category;
                   },
                 ),
-
-                // ── All products ───────────────────────────────────────
                 const SizedBox(height: 20),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
@@ -452,8 +438,8 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                     children: [
                       Text(
                         selectedCategory == allCategoryFilter
-                            ? 'All Products'
-                            : '$selectedCategory Products',
+                            ? 'All products'
+                            : '$selectedCategory products',
                         style: AppTextStyles.headingLg,
                       ),
                       const SizedBox(width: 8),
@@ -488,7 +474,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
                             height: 120,
                             child: Center(
                               child: Text(
-                                'No products found.',
+                                'No products in this category.',
                                 style: AppTextStyles.bodyMd,
                               ),
                             ),
@@ -519,7 +505,7 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Failed to load dashboard data: $error',
+                  'Could not load store catalog: $error',
                   style: AppTextStyles.bodyMd,
                   textAlign: TextAlign.center,
                 ),
@@ -530,6 +516,24 @@ class _DashboardBodyState extends ConsumerState<_DashboardBody> {
       ],
     );
   }
+}
+
+String _dashboardGreeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+bool _mostSearchedLabelIsFilterable(String label) {
+  const skip = {
+    '-',
+    '…',
+    'No searches yet',
+    'No trending matches yet',
+    'Add products first',
+  };
+  return !skip.contains(label);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -613,7 +617,7 @@ class _WelcomeBanner extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'MA.TAGPILA',
+                            'MaTAGPILA',
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.85),
                               fontSize: 12,
@@ -667,7 +671,7 @@ class _WelcomeBanner extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Container(
+                SizedBox(
                   width: 150,
                   height: 140,
                   child: Image.asset(
@@ -766,10 +770,6 @@ class _StatCard extends StatelessWidget {
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  List layout for All Products
-// ═══════════════════════════════════════════════════════════════════════════
 
 class _ProductListView extends StatelessWidget {
   final List<PriceItem> items;
@@ -917,10 +917,6 @@ class _ProductListTile extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  Category → accent color helper
-// ═══════════════════════════════════════════════════════════════════════════
-
 Color _categoryColor(int index) {
   const colors = [
     AppColors.catOrange,
@@ -932,10 +928,6 @@ Color _categoryColor(int index) {
   ];
   return colors[index % colors.length];
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  Recent price card (horizontal scroll)
-// ═══════════════════════════════════════════════════════════════════════════
 
 class _RecentPriceCard extends StatelessWidget {
   final PriceItem item;

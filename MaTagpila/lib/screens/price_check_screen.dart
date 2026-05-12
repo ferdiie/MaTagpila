@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme/app_theme.dart';
+import '../features/dashboard/presentation/providers/dashboard_catalog_providers.dart';
 import '../features/shared/models/price_item_model.dart';
 import '../features/shared/services/firestore_services.dart';
 
@@ -13,14 +14,18 @@ import '../features/shared/services/firestore_services.dart';
 // ─────────────────────────────────────────────
 final _searchQueryProvider = StateProvider<String>((_) => '');
 
-/// Search results are scoped to the current user via pricesServiceProvider,
-/// which internally uses /users/{uid}/prices — no cross-user data leaks.
+/// Search results are scoped to [effectiveStoreId] (same store as POS).
 final _searchResultsProvider =
     FutureProvider.autoDispose<List<PriceItem>>((ref) async {
   final q = ref.watch(_searchQueryProvider);
   if (q.trim().isEmpty) return [];
+  final storeId = ref.watch(effectiveStoreIdProvider);
+  if (storeId.isEmpty) return [];
   await Future.delayed(const Duration(milliseconds: 300));
-  return ref.read(pricesServiceProvider).searchByName(q);
+  return ref.read(pricesServiceProvider).searchByNameForStore(
+        storeId: storeId,
+        query: q,
+      );
 });
 
 final _expandedItemIdProvider = StateProvider<String?>((_) => null);
@@ -48,9 +53,7 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
   Widget build(BuildContext context) {
     final query = ref.watch(_searchQueryProvider);
     final resultsAsync = ref.watch(_searchResultsProvider);
-    // allPricesStreamProvider is already user-scoped — only shows items
-    // belonging to the currently signed-in user.
-    final allAsync = ref.watch(allPricesStreamProvider);
+    final allAsync = ref.watch(storePricesStreamProvider);
     final fmt = NumberFormat.currency(symbol: '₱', decimalDigits: 2);
 
     return Container(
@@ -95,7 +98,7 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Ma.Tagpila',
+                          Text('MaTAGPILA',
                               style: AppTextStyles.displayMd.copyWith(
                                 color: AppColors.white,
                               )),
@@ -153,6 +156,19 @@ class _PriceCheckScreenState extends ConsumerState<PriceCheckScreen> {
                   controller: _searchController,
                   onChanged: (v) =>
                       ref.read(_searchQueryProvider.notifier).state = v,
+                  onSubmitted: (v) async {
+                    final q = v.trim();
+                    if (q.isEmpty) return;
+                    final storeId = ref.read(effectiveStoreIdProvider);
+                    if (storeId.isEmpty) return;
+                    final results = await ref
+                        .read(pricesServiceProvider)
+                        .searchByNameForStore(storeId: storeId, query: q);
+                    if (results.isNotEmpty) {
+                      await trackStoreSearch(q, storeId, results);
+                      ref.invalidate(mostSearchedInStoreProvider);
+                    }
+                  },
                   style: AppTextStyles.headingSm,
                   decoration: InputDecoration(
                     hintText: 'Search item (e.g. Camia, rice, soap…)',
@@ -785,7 +801,7 @@ class _OptionsMenuSheet extends StatelessWidget {
                 color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(Icons.delete_outline_rounded,
+              child: const Icon(Icons.delete_outline_rounded,
                   color: AppColors.error, size: 22),
             ),
             title: Text(
@@ -1239,7 +1255,7 @@ class _DeleteConfirmDialogState extends State<_DeleteConfirmDialog> {
               color: AppColors.error.withValues(alpha: 0.08),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.delete_outline_rounded,
+            child: const Icon(Icons.delete_outline_rounded,
                 color: AppColors.error, size: 32),
           ),
           const SizedBox(height: 16),
